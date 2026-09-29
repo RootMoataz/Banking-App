@@ -8,7 +8,7 @@
 
 Backend REST API Without DB
 
-[Setup](#run-it-locally) · [Example](#a-small-banking-session) · [Endpoints](#the-api-at-a-glance) · [Tests](#check-the-work)
+[Setup](#run-it-locally) · [Example](#a-small-banking-session) · [Endpoints](#the-api-at-a-glance) · [Initialization](#steps-to-initialize-this-branch-of-the-app)
 
 </div>
 
@@ -220,7 +220,7 @@ Each application instance gets its own store.
 The [dependency map](docs/dependencies.md) goes into the relationships, deletion
 order, and the original project's user/customer naming.
 
-## Check the work
+## Steps to initialize this branch of the App
 
 ```sh
 python -m pip install -r requirements-dev.txt
