@@ -1,6 +1,7 @@
-# Keep the local environment, cached files, and private settings out of Git.
 .venv/
 __pycache__/
 .pytest_cache/
 *.py[cod]
 .env
+/postman/.postman/
+/postman/postman/
