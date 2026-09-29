@@ -198,6 +198,7 @@ exercise. Deleted IDs are never reused during the same server run.
 ## Current Architecture of the Branch
 
 ```mermaid
+%%{init: {"themeVariables": {"edgeLabelBackground": "transparent"}}}%%
 flowchart LR
     C[Customer] -->|owns many| A[Account]
     A -->|records many| T[Transaction]
