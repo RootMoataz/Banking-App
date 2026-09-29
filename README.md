@@ -200,7 +200,13 @@ exercise. Deleted IDs are never reused during the same server run.
 
 ## Current Architecture of the Branch
 
-![Current architecture: Customer owns many Accounts, each Account records many Transactions. Requests flow from controllers to services to in-memory repositories, with supporting models and tests.](docs/current-architecture.png)
+```mermaid
+flowchart LR
+    C[Customer] --> O[owns many] --> A[Account]
+    A --> R[records many] --> T[Transaction]
+    classDef relationship fill:none,stroke:none;
+    class O,R relationship;
+```
 
 | File | Responsibility |
 | :--- | :--- |
