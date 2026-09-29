@@ -200,6 +200,10 @@ exercise. Deleted IDs are never reused during the same server run.
 
 ## Current Architecture of the Branch
 
+### Record Relationships
+
+One customer can own multiple accounts, and each account can have multiple transactions.
+
 ```mermaid
 flowchart LR
     C[Customer] --> O[owns many] --> A[Account]
@@ -207,6 +211,10 @@ flowchart LR
     classDef relationship fill:none,stroke:none;
     class O,R relationship;
 ```
+
+### Code Structure
+
+The files below handle requests, business rules, storage, validation, and tests.
 
 | File | Responsibility |
 | :--- | :--- |
