@@ -40,14 +40,13 @@ response checks where relevant. Setup generates a fresh email and captures IDs;
 cleanup drains the sample account and deletes both accounts before the customer.
 The automated pytest suite provides additional validation and concurrency coverage.
 
-## Verification recorded for this update
+## Test coverage
 
 - `python -m pytest -q -p no:cacheprovider`: **62 passed**.
-- The 21-request Postman workflow was replayed against the application in-process,
-  checking each expected HTTP status plus balances, ownership, and history.
-  This verifies the collection's HTTP requests, not execution of its JavaScript
-  assertions by the Postman application.
-- Swagger's generated OpenAPI CRUD operations, ownership schema, response codes,
-  and documentation endpoint were checked by automated tests.
-- Interactive Swagger UI testing was blocked by browser permission denial.
-  The manual steps above remain available for completing that check.
+- `test_postman_collection.py` reads the collection file and sends its 21 requests
+  through TestClient. It checks response codes, balances, account ownership, and
+  transaction history. It does not execute the collection's JavaScript assertions.
+- `test_crud.py` checks the OpenAPI routes, customer ownership field, documented
+  response codes, and `/docs` response.
+- These results cover the API and collection requests. They do not establish a
+  successful interactive Swagger session or a run inside the Postman application.

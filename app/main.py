@@ -1,4 +1,4 @@
-"""Connect HTTP requests to the services and describe them in Swagger."""
+"""FastAPI routes for customers, accounts, and transactions."""
 
 from typing import Annotated
 

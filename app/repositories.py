@@ -1,4 +1,4 @@
-"""Store records here; the services decide when they can be changed."""
+"""Process-local records shared by the customer and account services."""
 from threading import RLock
 
 from .models import Account, Transaction, User

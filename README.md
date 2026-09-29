@@ -14,17 +14,20 @@ Backend REST API Without DB
 
 ---
 
-Paper Maker Banking App implements the backend milestone for the Simple Bank Application project. It handles
-customer details, account ownership, deposits, withdrawals, and transaction history.
-Data is stored in memory; no database setup is required.
+Paper Maker Banking App is a FastAPI backend for managing customers and their
+accounts. It supports deposits, withdrawals, and a transaction history for each
+account. Customer, account, and transaction records live in memory, so the app
+runs without a database connection.
 
 One customer can open several accounts. Each account starts at zero, and every
 successful deposit or withdrawal leaves a transaction record. The controllers,
 services, and repositories handle HTTP requests, business rules, and storage
 respectively.
 
-> **A note about memory:** restarting the server clears the data. Run one worker
-> and use sample customers; this milestone has no database or authentication.
+> **A note about memory:** restarting the server clears the data. Start the API
+> once with the command below and use sample customers. It runs as a single server
+> process, so all requests use the same in-memory records. Multiple server processes
+> would each have separate records. There is no login or persistent storage.
 
 ## A small banking session
 
@@ -133,7 +136,7 @@ Open an account using the `customerId` returned when you created the customer:
 ```
 
 An account edit takes only `{"accountType":"CURRENT"}`. Types are nonblank
-strings up to 50 characters; the project brief does not define a fixed list.
+strings up to 50 characters, such as SAVINGS or CURRENT.
 Ownership cannot be reassigned, and balance changes go through deposit or
 withdrawal rather than account edits.
 
@@ -163,9 +166,9 @@ a decimal string, which keeps values such as `0.10 + 0.20` exact.
 }
 ```
 
-`customerId` and `userId` refer to the same person. The original brief used
-`userId`, so that input and `POST /api/users` still work. New requests can use
-the customer endpoints and `customerId`.
+`customerId` and `userId` refer to the same person. Use `customerId` with the
+customer endpoints. `userId` and `POST /api/users` are kept for compatibility
+with the original API contract.
 
 </details>
 
@@ -198,10 +201,11 @@ exercise. Deleted IDs are never reused during the same server run.
 ## Current Architecture of the Branch
 
 ```mermaid
-%%{init: {"themeVariables": {"edgeLabelBackground": "transparent"}}}%%
 flowchart LR
-    C[Customer] -->|owns many| A[Account]
-    A -->|records many| T[Transaction]
+    C[Customer] --> O[owns many] --> A[Account]
+    A --> R[records many] --> T[Transaction]
+    classDef relationship fill:none,stroke:none;
+    class O,R relationship;
 ```
 
 | File | Responsibility |
@@ -217,8 +221,8 @@ customer CRUD; `AccountService` handles accounts, deposits, withdrawals, and
 history. A shared lock keeps concurrent balance checks and updates together.
 Each application instance gets its own store.
 
-The [dependency map](docs/dependencies.md) goes into the relationships, deletion
-order, and the original project's user/customer naming.
+The [dependency map](docs/dependencies.md) shows the record relationships and
+explains why accounts must be deleted before their customer.
 
 ## Steps to initialize this branch of the App
 
@@ -227,18 +231,23 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-The suite contains **62 tests** covering CRUD, ownership,
-validation, overdrafts, decimal precision, deletion, unique emails, ID allocation,
-and concurrent withdrawals. `requirements-lock.txt` records the tested dependency
-versions; install it instead if you want to reproduce that environment exactly.
+The suite contains **62 tests**:
+
+| File | Tests | Coverage |
+| :--- | ---: | :--- |
+| `test_api.py` | 38 | Money operations, rejected requests, history, and concurrent withdrawals |
+| `test_crud.py` | 23 | Customer/account CRUD, ownership, email uniqueness, deletion, and API schemas |
+| `test_postman_collection.py` | 1 | The collection's 21 requests in their saved order |
+
+`requirements-lock.txt` records the tested dependency versions. Install it instead
+of `requirements-dev.txt` to use those exact versions.
 
 For a walkthrough, follow the [Swagger test steps](docs/swagger-testing.md), or
 import the [Postman collection](postman/Banking-App.postman_collection.json) and run
 it in its stored order. The collection creates a fresh email, captures IDs, and
 cleans up its sample records at the end.
 
-Automated checks replay the collection's 21-request workflow against the API
-in-process and verify Swagger's schema and routes. They do not run the Postman
-application or interact with the Swagger UI. The
-[testing guide](docs/swagger-testing.md#verification-recorded-for-this-update)
-records the verification scope.
+The tests send requests directly to the app through FastAPI's TestClient. They
+check the Postman request sequence and the Swagger schema, but do not launch
+either application's interface. See [test coverage](docs/swagger-testing.md#test-coverage)
+for the checks performed and their limits.

@@ -1,4 +1,4 @@
-"""Keep the request rules and response fields together so they match Swagger."""
+"""Request validation and camelCase response models."""
 
 from datetime import datetime
 from decimal import Decimal
@@ -36,7 +36,7 @@ class AccountEdit(Model):
 class AccountCreate(Model):
     user_id: int = Field(gt=0, strict=True,
                          validation_alias=AliasChoices("customerId", "userId", "user_id"))
-    # SAVINGS is an example in the brief, so account types aren't limited to an enum.
+    # Accept types such as SAVINGS and CURRENT without restricting clients to a fixed list.
     account_type: str = Field(min_length=1, max_length=50)
 
 
@@ -59,7 +59,7 @@ class Account(Model):
     @computed_field
     @property
     def customer_id(self) -> int:
-        """Expose customerId while keeping userId for requests based on the original brief."""
+        """Both owner fields refer to the same customer record."""
         return self.user_id
 
 

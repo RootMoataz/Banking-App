@@ -1,4 +1,4 @@
-"""Apply the banking rules here so the routes only handle HTTP requests."""
+"""Customer CRUD, account ownership, and balance changes."""
 
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -58,7 +58,7 @@ class CustomerService:
             updated = current.model_copy(update={"name": data.name, "email": data.email})
             del self.store.users.emails[str(current.email).casefold()]
             self.store.users.add(updated)
-            # Accounts store a display name too; don't leave the old name on them.
+            # Keep the account's cached display name in sync with the customer.
             for account in list(self.store.accounts.accounts.values()):
                 if account.user_id == customer_id:
                     self.store.accounts.save(account.model_copy(update={"user_name": data.name}))
