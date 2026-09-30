@@ -159,12 +159,21 @@ class AccountService:
             delta, cond = -cents, {"balanceCents": {"$gte": cents}}
         else:
             delta, cond = cents, {"balanceCents": {"$lte": MAX_CENTS - cents}}
-        account = self.accounts.inc(account_oid, delta, cond)
-        if account is None:
-            self.get_account(account_oid)  # 404 when the account is missing
-            raise BankError(400, "Insufficient funds" if kind == "WITHDRAW" else "Balance would exceed 99999999.99")
-        self.transactions.insert(account, kind, cents)
-        return _account(account)
+
+        # The balance change and its history record commit together or not at all.
+        def work(session: ClientSession) -> dict:
+            account = self.accounts.get(account_oid, session)
+            if account is None:
+                raise BankError(404, "Account not found")
+            # Serializes this change with every other change to the customer's accounts and records.
+            self.customers.touch(account["customerId"], session)
+            after = self.accounts.inc(account_oid, delta, cond, session)
+            if after is None:
+                raise BankError(400, "Insufficient funds" if kind == "WITHDRAW" else "Balance would exceed 99999999.99")
+            self.transactions.insert(after, kind, cents, session)
+            return after
+
+        return _account(_in_transaction(self.db, work))
 
     def get_transactions(self, account_oid: ObjectId) -> list[Transaction]:
         self.get_account(account_oid)
