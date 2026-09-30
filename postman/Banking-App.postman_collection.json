@@ -155,7 +155,7 @@
         "url": "{{baseUrl}}/api/accounts",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"customerId\": {{customerId}},\n  \"accountType\": \"SAVINGS\"\n}",
+          "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"accountType\": \"SAVINGS\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -189,7 +189,7 @@
         "url": "{{baseUrl}}/api/accounts",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"customerId\": {{customerId}},\n  \"accountType\": \"CURRENT\"\n}",
+          "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"accountType\": \"CURRENT\"\n}",
           "options": {
             "raw": {
               "language": "json"

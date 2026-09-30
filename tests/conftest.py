@@ -4,9 +4,11 @@ from dataclasses import replace
 
 import pytest
 from dotenv import dotenv_values
+from fastapi.testclient import TestClient
 
 from app.config import ROOT, load_settings
 from app.db import ensure_indexes, get_database
+from app.main import create_app
 
 COLLECTIONS = ("customers", "accounts", "transactions", "alerts")
 
@@ -42,3 +44,9 @@ def clean_collections(db):
     _assert_test_db(db.name)
     for name in COLLECTIONS:
         db[name].delete_many({})
+
+
+@pytest.fixture
+def client(settings, db):
+    with TestClient(create_app(settings)) as test_client:
+        yield test_client
