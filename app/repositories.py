@@ -1,4 +1,5 @@
 """MongoDB collections shared by the customer and account services."""
+import re
 from datetime import datetime, timedelta, timezone
 
 from bson import Int64, ObjectId
@@ -25,6 +26,21 @@ class CustomerRepository:
 
     def get(self, oid: ObjectId) -> dict | None:
         return self.collection.find_one({"_id": oid})
+
+    def search(self, name: str | None, email: str | None, total_cond: dict, limit: int) -> list[dict]:
+        """Customers matching the text filters and the total-balance condition, each with totalCents, oldest first."""
+        # User text is escaped, so "." or "(" match themselves instead of acting as regex syntax.
+        text = {field: {"$regex": re.escape(value), "$options": "i"}
+                for field, value in (("name", name), ("email", email)) if value is not None}
+        return list(self.collection.aggregate([
+            {"$match": text},
+            {"$sort": {"_id": 1}},
+            {"$lookup": {"from": "accounts", "localField": "_id", "foreignField": "customerId", "as": "accounts"}},
+            {"$addFields": {"totalCents": {"$sum": "$accounts.balanceCents"}}},  # no accounts: 0
+            {"$match": {"totalCents": total_cond} if total_cond else {}},
+            {"$limit": limit},
+            {"$project": {"name": 1, "email": 1, "totalCents": 1}},
+        ]))
 
     def list(self) -> list[dict]:
         return list(self.collection.find().sort("_id"))
@@ -79,6 +95,14 @@ class AccountRepository:
             {"_id": oid, **cond}, {"$inc": {"balanceCents": Int64(delta_cents)}},
             return_document=ReturnDocument.AFTER, session=session)
 
+    def customer_total(self, customer_oid: ObjectId, session: ClientSession | None = None) -> int:
+        """The sum of all the customer's balances; 0 when they have no accounts."""
+        result = list(self.collection.aggregate([
+            {"$match": {"customerId": customer_oid}},
+            {"$group": {"_id": None, "total": {"$sum": "$balanceCents"}}},
+        ], session=session))
+        return result[0]["total"] if result else 0
+
 
 class TransactionRepository:
     def __init__(self, db: Database):
@@ -109,3 +133,21 @@ class TransactionRepository:
 
     def for_account(self, account_oid: ObjectId) -> list[dict]:
         return list(self.collection.find({"accountId": account_oid}).sort([("createdAt", 1), ("_id", 1)]))
+
+
+class AlertRepository:
+    def __init__(self, db: Database):
+        self.collection = db.alerts
+
+    def insert(self, record: dict, kind: str, total_cents: int, threshold_cents: int, session: ClientSession) -> dict:
+        """Record that the transaction `record` moved its customer's total across threshold_cents. The alert carries the
+        transaction's own date: that date may sit slightly ahead of the clock to keep the history in order."""
+        alert = {"customerId": record["customerId"], "accountId": record["accountId"], "transactionId": record["_id"],
+                 "type": kind, "totalCents": Int64(total_cents), "thresholdCents": Int64(threshold_cents),
+                 "createdAt": record["createdAt"]}
+        self.collection.insert_one(alert, session=session)
+        return alert
+
+    def list(self, customer_oid: ObjectId | None, limit: int) -> list[dict]:
+        query = {} if customer_oid is None else {"customerId": customer_oid}
+        return list(self.collection.find(query).sort([("createdAt", -1), ("_id", -1)]).limit(limit))

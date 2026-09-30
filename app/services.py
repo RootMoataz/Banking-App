@@ -1,16 +1,18 @@
-"""Customer CRUD, account ownership, and balance changes stored in MongoDB."""
+"""Customer CRUD and search, account ownership, balance changes, and threshold alerts stored in MongoDB."""
 
 from collections.abc import Callable
+from decimal import Decimal
 
 from bson import ObjectId
 from pymongo.client_session import ClientSession
 from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
 
-from .models import (Account, AccountCreate, AccountEdit, AmountRequest,
-                     Customer, MoneyResult, Transaction, User, UserCreate)
+from .config import Settings
+from .models import (Account, AccountCreate, AccountEdit, Alert, AmountRequest, Category, Customer,
+                     CustomerSummary, MoneyResult, Transaction, User, UserCreate)
 from .money import MAX_CENTS, from_cents, to_cents
-from .repositories import AccountRepository, CustomerRepository, TransactionRepository
+from .repositories import AccountRepository, AlertRepository, CustomerRepository, TransactionRepository
 
 
 class BankError(Exception):
@@ -18,6 +20,21 @@ class BankError(Exception):
         super().__init__(detail)
         self.status = status
         self.detail = detail
+
+
+def category(total_cents: int, settings: Settings) -> Category:
+    if total_cents < settings.low_cents:
+        return "LOW"
+    return "PREMIUM" if total_cents >= settings.premium_cents else "STANDARD"
+
+
+def crossing(before: int, after: int, settings: Settings) -> str | None:
+    """The alert for a change of a customer's total from before to after, if it crossed a threshold."""
+    if before >= settings.low_cents > after:
+        return "LOW_BALANCE"
+    if before < settings.premium_cents <= after:
+        return "HIGH_BALANCE"
+    return None
 
 
 def _in_transaction(db: Database, work: Callable[[ClientSession], object]):
@@ -42,9 +59,16 @@ def _transaction(doc: dict) -> Transaction:
                        balance_after=from_cents(doc["balanceAfterCents"]), date=doc["createdAt"])
 
 
+def _alert(doc: dict) -> Alert:
+    return Alert(alert_id=str(doc["_id"]), customer_id=str(doc["customerId"]), account_id=str(doc["accountId"]),
+                 transaction_id=str(doc["transactionId"]), type=doc["type"], total_balance=from_cents(doc["totalCents"]),
+                 threshold=from_cents(doc["thresholdCents"]), created_at=doc["createdAt"])
+
+
 class CustomerService:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, settings: Settings):
         self.db = db
+        self.settings = settings
         self.customers = CustomerRepository(db)
         self.accounts = AccountRepository(db)
 
@@ -69,6 +93,21 @@ class CustomerService:
 
     def get_all_customers(self) -> list[Customer]:
         return [_customer(doc) for doc in self.customers.list()]
+
+    def search(self, name: str | None, email: str | None, category_: Category | None, min_balance: Decimal | None,
+               max_balance: Decimal | None, limit: int) -> list[CustomerSummary]:
+        low, premium = self.settings.low_cents, self.settings.premium_cents
+        # Category and balance bounds combine into one condition on the customer's total.
+        cond = {"LOW": {"$lt": low}, "STANDARD": {"$gte": low, "$lt": premium},
+                "PREMIUM": {"$gte": premium}, None: {}}[category_]
+        if min_balance is not None:
+            cond["$gte"] = max(cond.get("$gte", 0), to_cents(min_balance))
+        if max_balance is not None:
+            cond["$lte"] = to_cents(max_balance)
+        return [CustomerSummary(customer_id=str(doc["_id"]), name=doc["name"], email=doc["email"],
+                                total_balance=from_cents(doc["totalCents"]),
+                                category=category(doc["totalCents"], self.settings))
+                for doc in self.customers.search(name, email, cond, limit)]
 
     def edit_customer(self, customer_oid: ObjectId, data: UserCreate) -> Customer:
         def work(session: ClientSession) -> dict:
@@ -96,11 +135,13 @@ class CustomerService:
 
 
 class AccountService:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, settings: Settings):
         self.db = db
+        self.settings = settings
         self.customers = CustomerRepository(db)
         self.accounts = AccountRepository(db)
         self.transactions = TransactionRepository(db)
+        self.alerts = AlertRepository(db)
 
     def create_account(self, data: AccountCreate) -> Account:
         customer_oid = ObjectId(data.user_id)
@@ -161,7 +202,7 @@ class AccountService:
         else:
             delta, cond = cents, {"balanceCents": {"$lte": MAX_CENTS - cents}}
 
-        # The balance change and its history record commit together or not at all.
+        # The balance change, its history record and any alert commit together or not at all.
         def work(session: ClientSession) -> tuple[str, dict]:
             # First on every attempt: the driver may rerun this after another request with the key committed, and a
             # replay must not depend on the account still existing or on the balance still passing the bound check.
@@ -176,7 +217,14 @@ class AccountService:
             after = self.accounts.inc(account_oid, delta, cond, session)
             if after is None:
                 raise BankError(400, "Insufficient funds" if kind == "WITHDRAW" else "Balance would exceed 99999999.99")
-            self.transactions.insert(after, kind, cents, key, session)
+            record = self.transactions.insert(after, kind, cents, key, session)
+            # The customer write above makes a concurrent change to any of this customer's accounts conflict and retry,
+            # so this total is current and two operations cannot both report the same crossing.
+            total_after = self.accounts.customer_total(after["customerId"], session)
+            alert = crossing(total_after - delta, total_after, self.settings)
+            if alert is not None:
+                threshold = self.settings.low_cents if alert == "LOW_BALANCE" else self.settings.premium_cents
+                self.alerts.insert(record, alert, total_after, threshold, session)
             return "done", after
 
         try:
@@ -202,3 +250,7 @@ class AccountService:
     def get_transactions(self, account_oid: ObjectId) -> list[Transaction]:
         self.get_account(account_oid)
         return [_transaction(doc) for doc in self.transactions.for_account(account_oid)]
+
+    def get_alerts(self, customer_oid: ObjectId | None, limit: int) -> list[Alert]:
+        # Alerts outlive their customer, like transactions, so an unknown customer just has none.
+        return [_alert(doc) for doc in self.alerts.list(customer_oid, limit)]

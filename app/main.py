@@ -1,23 +1,32 @@
-"""FastAPI routes for customers, accounts, and transactions."""
+"""FastAPI routes for customers, accounts, transactions, and alerts."""
 
 from contextlib import asynccontextmanager
+from decimal import Decimal
 from typing import Annotated
 
 from bson import ObjectId
-from fastapi import FastAPI, Header, Path, Response
+from fastapi import FastAPI, Header, Path, Query, Response
 from fastapi.responses import JSONResponse
 
 from .config import Settings, load_settings
 from .db import ensure_indexes, get_database
-from .models import (OBJECT_ID_PATTERN, Account, AccountCreate, AccountEdit, AmountRequest,
-                     Customer, MoneyResult, Transaction, User, UserCreate)
+from .models import (OBJECT_ID_PATTERN, Account, AccountCreate, AccountEdit, Alert, AmountRequest, Category,
+                     Customer, CustomerSummary, MoneyResult, Transaction, User, UserCreate)
 from .services import AccountService, BankError, CustomerService
+
+NO_CONTROL_CHARS = r"^[^\x00-\x1f\x7f]*$"  # a NUL in a search regex would reach MongoDB and come back as a 500
 
 Id = Annotated[str, Path(pattern=OBJECT_ID_PATTERN, description="24-character hex ID")]
 IdempotencyKey = Annotated[str | None, Header(
     alias="Idempotency-Key", min_length=1, max_length=200, pattern=r"^ *[\x21-\x7e][\x20-\x7e]*$",
     description="Optional, up to 200 printable ASCII characters. Resending a key with the same request replays the "
                 "first result without moving money again; reusing it for a different request returns 409.")]
+Limit = Annotated[int, Query(ge=1, le=200, description="At most this many results, 1 to 200")]
+
+
+def _balance(alias: str):
+    return Query(alias=alias, ge=0, max_digits=10, decimal_places=2, allow_inf_nan=False,
+                 description="A total balance such as 100.00, inclusive")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -25,10 +34,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         # Settings and the connection are created at startup, not at import: uvicorn
         # imports this module first, and tests build apps for their own database.
-        db = get_database(settings or load_settings())
+        resolved = settings or load_settings()
+        db = get_database(resolved)
         ensure_indexes(db)  # idempotent; email uniqueness must not depend on a manual setup step
-        app.state.customers = CustomerService(db)
-        app.state.accounts = AccountService(db)
+        app.state.customers = CustomerService(db, resolved)
+        app.state.accounts = AccountService(db, resolved)
         try:
             yield
         finally:
@@ -41,6 +51,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                       {"name": "Customers", "description": "Create, list, retrieve, replace and delete customers."},
                       {"name": "Accounts", "description": "Each account belongs to one customer. Edit accountType only; use deposit/withdraw for balance changes."},
                       {"name": "Transactions", "description": "Successful deposits and withdrawals, oldest first."},
+                      {"name": "Alerts", "description": "In-app records of a customer's total balance crossing a threshold."},
                       {"name": "Users", "description": "Compatibility endpoint from the original project; users and customers share the same records."},
                   ])
 
@@ -65,6 +76,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def post_customer(data: UserCreate):
         """Send a name and an unused email address to create a customer."""
         return app.state.customers.create_customer(data)
+
+    # Registered before /api/customers/{id}, which would otherwise take "search" as an ID and answer 422.
+    @app.get("/api/customers/search", response_model=list[CustomerSummary], tags=["Customers"],
+             summary="SearchCustomers")
+    def search_customers(name: Annotated[str | None, Query(max_length=100, pattern=NO_CONTROL_CHARS)] = None,
+                         email: Annotated[str | None, Query(max_length=100, pattern=NO_CONTROL_CHARS)] = None,
+                         category: Category | None = None,
+                         min_balance: Annotated[Decimal | None, _balance("minBalance")] = None,
+                         max_balance: Annotated[Decimal | None, _balance("maxBalance")] = None,
+                         limit: Limit = 50):
+        """Filter customers by name or email (case-insensitive substring), by category, and by total balance
+        (inclusive bounds). The total is the sum of all the customer's accounts; a customer with none has 0.00.
+        Categories: LOW below the low threshold, PREMIUM at or above the premium threshold, otherwise STANDARD."""
+        return app.state.customers.search(name, email, category, min_balance, max_balance, limit)
 
     @app.get("/api/customers/{id}", response_model=Customer, tags=["Customers"],
              summary="GetCustomerById", responses={404: {"description": "Customer not found"}})
@@ -145,6 +170,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
              tags=["Transactions"], responses={404: {"description": "Account not found"}})
     def transactions(id: Id):
         return app.state.accounts.get_transactions(ObjectId(id))
+
+    @app.get("/api/alerts", response_model=list[Alert], tags=["Alerts"], summary="GetAlerts")
+    def alerts(customer_id: Annotated[str | None, Query(alias="customerId", pattern=OBJECT_ID_PATTERN)] = None,
+               limit: Limit = 50):
+        """Alerts written when a deposit or withdrawal moved a customer's total below the low threshold or up to the
+        premium threshold, newest first."""
+        return app.state.accounts.get_alerts(None if customer_id is None else ObjectId(customer_id), limit)
 
     return app
 
