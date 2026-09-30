@@ -1,6 +1,7 @@
-"""FastAPI routes for customers, accounts, transactions, and alerts."""
+"""FastAPI routes for customers, accounts, transactions, alerts, and the transaction audit."""
 
 from contextlib import asynccontextmanager
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -10,8 +11,8 @@ from fastapi.responses import JSONResponse
 
 from .config import Settings, load_settings
 from .db import ensure_indexes, get_database
-from .models import (OBJECT_ID_PATTERN, Account, AccountCreate, AccountEdit, Alert, AmountRequest, Category,
-                     Customer, CustomerSummary, MoneyResult, Transaction, User, UserCreate)
+from .models import (OBJECT_ID_PATTERN, Account, AccountCreate, AccountEdit, Alert, AmountRequest, AuditPage,
+                     Category, Customer, CustomerSummary, MoneyResult, Transaction, User, UserCreate)
 from .services import AccountService, BankError, CustomerService
 
 NO_CONTROL_CHARS = r"^[^\x00-\x1f\x7f]*$"  # a NUL in a search regex would reach MongoDB and come back as a 500
@@ -52,6 +53,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                       {"name": "Accounts", "description": "Each account belongs to one customer. Edit accountType only; use deposit/withdraw for balance changes."},
                       {"name": "Transactions", "description": "Successful deposits and withdrawals, oldest first."},
                       {"name": "Alerts", "description": "In-app records of a customer's total balance crossing a threshold."},
+                      {"name": "Audit", "description": "Transaction history by customer or account, filtered by "
+                                                       "date and read page by page, including deleted accounts "
+                                                       "and customers."},
                       {"name": "Users", "description": "Compatibility endpoint from the original project; users and customers share the same records."},
                   ])
 
@@ -177,6 +181,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """Alerts written when a deposit or withdrawal moved a customer's total below the low threshold or up to the
         premium threshold, newest first."""
         return app.state.accounts.get_alerts(None if customer_id is None else ObjectId(customer_id), limit)
+
+    @app.get("/api/audit/transactions", response_model=AuditPage, tags=["Audit"], summary="AuditTransactions",
+             responses={422: {"description": "No customerId or accountId, a malformed parameter or cursor, or a cursor "
+                                             "issued for different filters"}})
+    def audit_transactions(
+            customer_id: Annotated[str | None, Query(alias="customerId", pattern=OBJECT_ID_PATTERN)] = None,
+            account_id: Annotated[str | None, Query(alias="accountId", pattern=OBJECT_ID_PATTERN)] = None,
+            start: Annotated[datetime | None, Query(alias="from", description="Inclusive, ISO 8601")] = None,
+            end: Annotated[datetime | None, Query(alias="to", description="Exclusive, ISO 8601")] = None,
+            limit: Limit = 50,
+            cursor: Annotated[str | None, Query(max_length=500, description="The previous page's nextCursor")] = None):
+        """Every deposit and withdrawal of a customer (all their accounts) or of one account, oldest first by date,
+        then by txnId. Give customerId, accountId or both. Records are kept after their account and customer are
+        deleted, so deleted IDs still return their history.
+
+        Times are ISO 8601 such as 2026-09-30T08:00:00Z; a time without an offset is read as UTC. In a URL write an
+        offset as `%2B02:00` (a bare `+` becomes a space and is rejected), or simply use `Z`. `from` is inclusive
+        and `to` is exclusive; when `from` is not before `to` the window is empty. To read the next page, send the
+        same filters with `cursor` set to the previous page's nextCursor (null on the last page). A filter may be
+        written differently (ID letter case, `Z` or `+00:00`, another offset for the same instant) and `limit` may
+        change, but a cursor sent with other filters is rejected with 422."""
+        return app.state.accounts.audit(customer_id, account_id, start, end, limit, cursor)
 
     return app
 

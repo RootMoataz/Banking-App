@@ -134,6 +134,15 @@ class TransactionRepository:
     def for_account(self, account_oid: ObjectId) -> list[dict]:
         return list(self.collection.find({"accountId": account_oid}).sort([("createdAt", 1), ("_id", 1)]))
 
+    def page(self, filters: dict, after: tuple[datetime, ObjectId] | None, limit: int) -> list[dict]:
+        """Up to limit records matching filters, oldest first, starting strictly after the (createdAt, _id) pair."""
+        query = dict(filters)
+        if after is not None:
+            t, oid = after
+            # _id breaks ties, so records sharing one millisecond are neither repeated nor skipped across pages.
+            query["$or"] = [{"createdAt": {"$gt": t}}, {"createdAt": t, "_id": {"$gt": oid}}]
+        return list(self.collection.find(query).sort([("createdAt", 1), ("_id", 1)]).limit(limit))
+
 
 class AlertRepository:
     def __init__(self, db: Database):
