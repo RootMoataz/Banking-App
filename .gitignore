@@ -5,3 +5,13 @@ __pycache__/
 .env
 /postman/.postman/
 /postman/postman/
+# AI-agent notes, coordination, and specs stay local
+/.omc/
+/docs/superpowers/
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+GROK.md
+/.claude/
+/.codex/
+/.grok/
