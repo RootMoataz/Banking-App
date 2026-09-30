@@ -1,154 +1,152 @@
-"""Customer CRUD, account ownership, and balance changes."""
-
+"""Banking operations commit together with their audit records and messages."""
 from datetime import datetime, timezone
-from decimal import Decimal
 
-from .models import (Account, AccountCreate, AccountEdit, AmountRequest,
-                     Customer, Transaction, User, UserCreate)
-from .repositories import MemoryStore
+from bson import ObjectId
+
+from .audit import TransactionRepository
+from .errors import BankError
+from .models import Account, Customer, User, from_cents, to_cents
+from .notifications import NotificationRepository, category_for, message_templates
+from .repositories import AccountRepository, CustomerRepository
 
 
-class BankError(Exception):
-    def __init__(self, status: int, detail: str):
-        super().__init__(detail)
-        self.status = status
-        self.detail = detail
+def customer_model(row):
+    return Customer(customer_id=str(row['_id']), name=row['name'], email=row['email'],
+                    created_at=row['createdAt'], total_balance=from_cents(row['totalCents']),
+                    category=row['category'], marketing_enabled=row['marketingEnabled'])
+
+
+def account_model(row, customer):
+    return Account(account_id=str(row['_id']), user_id=str(row['customerId']),
+                   user_name=customer['name'], account_type=row['accountType'],
+                   balance=from_cents(row['balanceCents']), created_at=row['createdAt'])
 
 
 class CustomerService:
-    def __init__(self, store: MemoryStore):
+    def __init__(self, store):
         self.store = store
+        self.customers = CustomerRepository(store.database)
+        self.accounts = AccountRepository(store.database)
+        self.notifications = NotificationRepository(store.database)
 
-    def create_user(self, data: UserCreate) -> User:
-        with self.store.lock:
-            if str(data.email).casefold() in self.store.users.emails:
-                raise BankError(409, "A user with this email already exists")
-            user = User(user_id=self.store.users.next_id, name=data.name,
-                        email=data.email, created_at=datetime.now(timezone.utc))
-            self.store.users.add(user)
-            self.store.users.next_id += 1
-            return user
+    def create_customer(self, data):
+        return self.store.run_transaction(lambda session: customer_model(self.customers.add(data, session)))
 
-    @staticmethod
-    def _customer(user: User) -> Customer:
-        return Customer(customer_id=user.user_id, name=user.name,
-                        email=user.email, created_at=user.created_at)
+    def create_user(self, data):
+        customer = self.create_customer(data)
+        return User(user_id=customer.customer_id, name=customer.name, email=customer.email,
+                    created_at=customer.created_at)
 
-    def create_customer(self, data: UserCreate) -> Customer:
-        return self._customer(self.create_user(data))
+    def get_customer(self, customer_id):
+        return customer_model(self.customers.get(customer_id))
 
-    def get_customer(self, customer_id: int) -> Customer:
-        with self.store.lock:
-            user = self.store.users.get(customer_id)
-            if user is None:
-                raise BankError(404, "Customer not found")
-            return self._customer(user)
+    def get_all_customers(self, search=None, category=None, offset=0, limit=50):
+        return [customer_model(row) for row in self.customers.list(search, category, offset, limit)]
 
-    def get_all_customers(self) -> list[Customer]:
-        with self.store.lock:
-            return [self._customer(user) for user in self.store.users.users.values()]
+    def edit_customer(self, customer_id, data):
+        def edit(session):
+            self.customers.touch(customer_id, session)
+            return customer_model(self.customers.update(customer_id, dict(name=data.name, email=str(data.email),
+                                               normalizedEmail=str(data.email).casefold()), session))
+        return self.store.run_transaction(edit)
 
-    def edit_customer(self, customer_id: int, data: UserCreate) -> Customer:
-        with self.store.lock:
-            self.get_customer(customer_id)
-            owner = self.store.users.emails.get(str(data.email).casefold())
-            if owner is not None and owner != customer_id:
-                raise BankError(409, "A customer with this email already exists")
-            current = self.store.users.get(customer_id)
-            updated = current.model_copy(update={"name": data.name, "email": data.email})
-            del self.store.users.emails[str(current.email).casefold()]
-            self.store.users.add(updated)
-            # Keep the account's cached display name in sync with the customer.
-            for account in list(self.store.accounts.accounts.values()):
-                if account.user_id == customer_id:
-                    self.store.accounts.save(account.model_copy(update={"user_name": data.name}))
-            return self._customer(updated)
+    def delete_customer(self, customer_id):
+        def archive(session):
+            self.customers.touch(customer_id, session)
+            if self.accounts.has_active(customer_id, session):
+                raise BankError(409, "Close the customer's accounts first")
+            self.customers.update(customer_id, dict(active=False, archivedAt=datetime.now(timezone.utc)), session)
+        self.store.run_transaction(archive)
 
-    def delete_customer(self, customer_id: int) -> None:
-        with self.store.lock:
-            self.get_customer(customer_id)
-            if any(a.user_id == customer_id for a in self.store.accounts.accounts.values()):
-                raise BankError(409, "Delete the customer's accounts first")
-            user = self.store.users.users.pop(customer_id)
-            del self.store.users.emails[str(user.email).casefold()]
+    def set_preferences(self, customer_id, marketing_enabled):
+        def update(session):
+            self.customers.touch(customer_id, session)
+            return customer_model(self.customers.update(customer_id, {'marketingEnabled':marketing_enabled}, session))
+        return self.store.run_transaction(update)
+
+    def get_notifications(self, customer_id, kind=None, offset=0, limit=50):
+        self.customers.get(customer_id)
+        return self.notifications.list_for_customer(ObjectId(customer_id), kind, offset, limit)
 
 
 class AccountService:
-    MAX_BALANCE = Decimal("99999999.99")  # The largest value that fits DECIMAL(10,2) in the brief.
-
-    def __init__(self, store: MemoryStore):
+    def __init__(self, store):
         self.store = store
+        self.accounts = AccountRepository(store.database)
+        self.customers = CustomerRepository(store.database)
+        self.transactions = TransactionRepository(store.database)
+        self.notifications = NotificationRepository(store.database)
 
-    def create_account(self, data: AccountCreate) -> Account:
-        with self.store.lock:
-            user = self.store.users.get(data.user_id)
-            if user is None:
-                raise BankError(404, "Customer not found")
-            account = Account(account_id=self.store.accounts.next_id,
-                              user_id=user.user_id, user_name=user.name,
-                              account_type=data.account_type,
-                              created_at=datetime.now(timezone.utc))
-            self.store.accounts.save(account)
-            self.store.accounts.next_id += 1
-            return account
+    def create_account(self, data):
+        def create(session):
+            owner = self.customers.touch(data.user_id, session)
+            row = self.accounts.add(data.user_id, data.account_type, session)
+            if not owner['initialized']:
+                version = owner['categoryVersion'] + 1
+                self.customers.update(owner['_id'], {'initialized':True,'categoryVersion':version}, session)
+                self.notifications.add_messages(owner['_id'], version,
+                    message_templates('LOW', owner['marketingEnabled']), None, session)
+            return account_model(row, owner)
+        return self.store.run_transaction(create)
 
-    def get_all_accounts(self) -> list[Account]:
-        with self.store.lock:
-            return list(self.store.accounts.accounts.values())
+    def get_account(self, account_id):
+        row = self.accounts.get(account_id)
+        return account_model(row, self.customers.get(row['customerId']))
 
-    def get_customer_accounts(self, customer_id: int) -> list[Account]:
-        with self.store.lock:
-            if self.store.users.get(customer_id) is None:
-                raise BankError(404, "Customer not found")
-            return [a for a in self.store.accounts.accounts.values() if a.user_id == customer_id]
+    def get_all_accounts(self, offset=0, limit=50):
+        return [account_model(row, self.customers.get(row['customerId']))
+                for row in self.accounts.list(offset=offset, limit=limit)]
 
-    def edit_account(self, account_id: int, data: AccountEdit) -> Account:
-        with self.store.lock:
-            account = self.get_account(account_id)
-            updated = account.model_copy(update={"account_type": data.account_type})
-            self.store.accounts.save(updated)
-            return updated
+    def get_customer_accounts(self, customer_id, offset=0, limit=50):
+        owner = self.customers.get(customer_id)
+        return [account_model(row, owner) for row in self.accounts.list(customer_id, offset, limit)]
 
-    def delete_account(self, account_id: int) -> None:
-        with self.store.lock:
-            account = self.get_account(account_id)
-            if account.balance != 0:
-                raise BankError(409, "Withdraw the remaining balance before deleting the account")
-            del self.store.accounts.accounts[account_id]
-            self.store.transactions.transactions.pop(account_id, None)
+    def edit_account(self, account_id, data):
+        def edit(session):
+            row = self.accounts.get(account_id, session)
+            owner = self.customers.touch(row['customerId'], session)
+            row = self.accounts.update(account_id, {'accountType':data.account_type}, session)
+            return account_model(row, owner)
+        return self.store.run_transaction(edit)
 
-    def get_account(self, account_id: int) -> Account:
-        with self.store.lock:
-            account = self.store.accounts.get(account_id)
-            if account is None:
-                raise BankError(404, "Account not found")
-            return account
+    def delete_account(self, account_id):
+        def close(session):
+            row = self.accounts.get(account_id, session)
+            self.customers.touch(row['customerId'], session)
+            if row['balanceCents']:
+                raise BankError(409, 'Withdraw the remaining balance before closing the account')
+            self.accounts.update(account_id, dict(active=False, closedAt=datetime.now(timezone.utc)), session)
+        self.store.run_transaction(close)
 
-    def deposit(self, account_id: int, data: AmountRequest) -> Account:
-        return self._transact(account_id, data, "DEPOSIT")
+    def deposit(self, account_id, data):
+        return self._transact(account_id, data, 'DEPOSIT')
 
-    def withdraw(self, account_id: int, data: AmountRequest) -> Account:
-        return self._transact(account_id, data, "WITHDRAW")
+    def withdraw(self, account_id, data):
+        return self._transact(account_id, data, 'WITHDRAW')
 
-    def _transact(self, account_id: int, data: AmountRequest, kind: str) -> Account:
-        # Keep the balance check and update together so two withdrawals can't spend the same money.
-        with self.store.lock:
-            account = self.get_account(account_id)
-            amount = data.amount.quantize(Decimal("0.01"))
-            if kind == "WITHDRAW" and amount > account.balance:
-                raise BankError(400, "Insufficient funds")
-            balance = account.balance + (amount if kind == "DEPOSIT" else -amount)
-            if balance > self.MAX_BALANCE:
-                raise BankError(400, "Balance would exceed 99999999.99")
-            updated = account.model_copy(update={"balance": balance})
-            transaction = Transaction(txn_id=self.store.transactions.next_id,
-                                      account_id=account_id, type=kind, amount=amount,
-                                      date=datetime.now(timezone.utc))
-            self.store.accounts.save(updated)
-            self.store.transactions.add(transaction)
-            return updated
+    def _transact(self, account_id, data, kind):
+        amount = to_cents(data.amount)
+        delta = amount if kind == 'DEPOSIT' else -amount
 
-    def get_transactions(self, account_id: int) -> list[Transaction]:
-        with self.store.lock:
-            self.get_account(account_id)
-            return self.store.transactions.for_account(account_id)
+        def change(session):
+            row = self.accounts.get(account_id, session)
+            owner = self.customers.touch(row['customerId'], session)
+            total = owner['totalCents'] + delta
+            if total > 9223372036854775807:
+                raise BankError(400, 'Combined customer balance exceeds the storage limit')
+            row = self.accounts.change_balance(account_id, delta, session)
+            category = category_for(total)
+            changed = category != owner['category']
+            version = owner['categoryVersion'] + int(changed)
+            self.customers.update(owner['_id'], dict(totalCents=total, category=category, categoryVersion=version), session)
+            transaction_id = self.transactions.add(dict(accountId=row['_id'], customerId=owner['_id'],
+                type=kind, amountCents=amount, balanceAfterCents=row['balanceCents'], date=datetime.now(timezone.utc)), session)
+            if changed:
+                self.notifications.add_messages(owner['_id'], version,
+                    message_templates(category, owner['marketingEnabled']), transaction_id, session, category)
+            return account_model(row, owner)
+        return self.store.run_transaction(change)
+
+    def get_transactions(self, account_id, offset=0, limit=50):
+        self.accounts.get(account_id, include_closed=True)
+        return self.transactions.list({'accountId':ObjectId(account_id)}, offset, limit)

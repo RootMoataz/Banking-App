@@ -1,52 +1,50 @@
-# Testing with Swagger and Postman
+# Demonstrating the Atlas branch
 
-Start the server using the README, then open http://127.0.0.1:8000/docs.
-Swagger is generated from the actual routes and schemas; expand an operation,
-click **Try it out**, enter its body/path ID, and click **Execute**. Check the
-**Server response** status and body. IDs below assume a fresh server; otherwise
-use the IDs returned by your requests.
+Start the API using the README setup and open http://127.0.0.1:8000/docs.
+Use a sample customer and keep the returned string IDs for later requests.
 
-| Step | Operation | Input | Expected |
-| --- | --- | --- | --- |
-| 1 | GET /api/customers | None | 200, empty array on fresh server |
-| 2 | POST /api/customers | `{"name":"Moataz Hikal","email":"moataz@example.com"}` | 201, customerId |
-| 3 | GET /api/customers/1 | Returned ID | 200, Moataz Hikal |
-| 4 | PUT /api/customers/1 | `{"name":"Moataz Hikal","email":"moataz.updated@example.com"}` | 200, updated email |
-| 5 | POST /api/accounts | `{"customerId":1,"accountType":"SAVINGS"}` | 201, zero balance |
-| 6 | POST /api/accounts | `{"customerId":1,"accountType":"CURRENT"}` | 201, a different accountId |
-| 7 | GET /api/customers/1/accounts | Customer ID | 200, both accounts |
-| 8 | GET /api/accounts | None | 200, all accounts |
-| 9 | PUT /api/accounts/1 | `{"accountType":"CURRENT"}` | 200, edited type |
-| 10 | POST /api/accounts/1/deposit | `{"amount":"100.00"}` | 200, balance 100.00 |
-| 11 | POST /api/accounts/1/withdraw | `{"amount":"25.00"}` | 200, balance 75.00 |
-| 12 | GET /api/accounts/1 | Account ID | 200, balance 75.00 |
-| 13 | GET /api/accounts/1/transactions | Account ID | 200, deposit and withdrawal |
-| 14 | POST /api/accounts/1/withdraw | `{"amount":"76.00"}` | 400, insufficient funds |
-| 15 | DELETE /api/accounts/1 | Account ID | 409, balance is nonzero |
-| 16 | DELETE /api/customers/1 | Customer ID | 409, accounts still exist |
-| 17 | POST /api/accounts/1/withdraw | `{"amount":"75.00"}` | 200, zero balance |
-| 18 | DELETE /api/accounts/1 and /2 | Each account ID | 204, empty bodies |
-| 19 | DELETE /api/customers/1 | Customer ID | 204, empty body |
-| 20 | GET /api/customers/1 | Deleted ID | 404 |
+## Walkthrough
 
-Also try a blank name, invalid email, missing fields, and a zero/negative deposit;
-expect 422. Duplicate email returns 409, and an unknown customer on account creation
-returns 404. A rejected request must leave the balance and history unchanged.
+1. POST `/api/customers` with Moataz Hikal and a fresh example email. Expect 201.
+2. PATCH `/api/customers/{id}/preferences` with `{"marketingEnabled":true}`.
+3. POST `/api/accounts` with the returned customerId and accountType SAVINGS.
+4. GET customer notifications: one low-balance alert and one loan-options message.
+5. Open a second account. Check that no extra initial messages were created.
+6. Deposit 100.00 in the first account, then withdraw 25.00. Balance is 75.00.
+7. Try withdrawing 76.00. Expect 400, with balance and history unchanged.
+8. Deposit 9925.00 in the second account. Combined balance is 10000.00, category PREMIUM.
+9. GET notifications with kind PREMIUM_MARKETING. Expect one premium message.
+10. Search `/api/customers?search=moataz&category=PREMIUM` and locate your sample customer.
+11. Disable marketing, then withdraw 9925.00 from the second account. Returning to LOW creates an alert, without another loan message.
+12. Query `/api/audit/transactions` with customerId/accountId and a timezone-aware from/to range. Retrieve a single result by txnId.
+13. Restart the API, then retrieve the same account. Its balance and history persist.
+14. Withdraw the final 75.00, close both accounts, and archive the customer. Audit history remains queryable by customerId.
 
-For Postman, import `postman/Banking-App.postman_collection.json`, leave `baseUrl`
-as `http://127.0.0.1:8000`, and select **Run collection** in its stored order.
-Every request has a status assertion, with additional balance, relationship, and
-response checks where relevant. Setup generates a fresh email and captures IDs;
-cleanup drains the sample account and deletes both accounts before the customer.
-The automated pytest suite provides additional validation and concurrency coverage.
+The first return to LOW at step 6 also creates a new low alert and opted-in loan
+message. Remaining within LOW does not repeat either message. Newly created
+customers without accounts receive no messages.
 
-## Test coverage
+## Postman
 
-- `python -m pytest -q -p no:cacheprovider`: **62 passed**.
-- `test_postman_collection.py` reads the collection file and sends its 21 requests
-  through TestClient. It checks response codes, balances, account ownership, and
-  transaction history. It does not execute the collection's JavaScript assertions.
-- `test_crud.py` checks the OpenAPI routes, customer ownership field, documented
-  response codes, and `/docs` response.
-- These results cover the API and collection requests. They do not establish a
-  successful interactive Swagger session or a run inside the Postman application.
+Import `postman/Banking-App.postman_collection.json`, set baseUrl to
+`http://127.0.0.1:8000`, and run the collection in order. It generates a fresh
+email, saves IDs, checks responses, demonstrates premium/low triggers, and archives
+its sample records at the end. It retains history by design. Re-running uses a new
+email. No database URI belongs in the collection.
+
+The exported collection contains executable Postman assertions. The Python replay
+checks the request sequence and key response values, but does not run that JavaScript.
+Use Postman's Runner to capture actual Postman results for submission.
+
+## Test coverage and verification limits
+
+Unit tests cover configuration, credential redaction, categories, templates, and
+money conversion. Integration tests exercise a real transaction-capable MongoDB
+server: CRUD, exact cents, persistence across app instances, overdrafts, concurrent
+withdrawals, customer totals, preference/lifecycle races, rollback, retry duplicates,
+search, UTC boundaries, pagination, history retention, and the collection workflow.
+
+The implementation was tested against an isolated local MongoDB replica set.
+A live Atlas connection and manual Swagger/Postman clicks require separate
+verification; neither is implied by a green local test run. If test settings are
+missing, pytest skips integration tests with an explicit explanation.

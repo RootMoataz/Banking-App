@@ -1,7 +1,8 @@
 {
   "info": {
-    "name": "Paper Maker Banking App - Customer and Account CRUD",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    "name": "Paper Maker Banking App - MongoDB Atlas",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Persistent banking, category messages and transaction auditing. Messages are stored only; cleanup archives the sample customer and accounts."
   },
   "variable": [
     {
@@ -22,6 +23,10 @@
     },
     {
       "key": "email",
+      "value": ""
+    },
+    {
+      "key": "transactionId",
       "value": ""
     }
   ],
@@ -143,6 +148,40 @@
       ]
     },
     {
+      "name": "Enable Marketing",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/customers/{{customerId}}/preferences",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"marketingEnabled\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Opted in\", () => pm.expect(pm.response.json().marketingEnabled).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "Create Account",
       "request": {
         "method": "POST",
@@ -155,7 +194,7 @@
         "url": "{{baseUrl}}/api/accounts",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"customerId\": {{customerId}},\n  \"accountType\": \"SAVINGS\"\n}",
+          "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"accountType\": \"SAVINGS\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -189,7 +228,7 @@
         "url": "{{baseUrl}}/api/accounts",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"customerId\": {{customerId}},\n  \"accountType\": \"CURRENT\"\n}",
+          "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"accountType\": \"CURRENT\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -205,6 +244,31 @@
             "exec": [
               "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
               "pm.collectionVariables.set(\"secondAccountId\", pm.response.json().accountId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Initial Notifications",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/customers/{{customerId}}/notifications"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"One alert and one marketing message\", () => pm.expect(pm.response.json()).to.have.lengthOf(2));"
             ]
           }
         }
@@ -385,7 +449,58 @@
             "type": "text/javascript",
             "exec": [
               "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
-              "pm.test(\"Two transactions\", () => pm.expect(pm.response.json()).to.have.lengthOf(2));"
+              "pm.test(\"Two transactions\", () => pm.expect(pm.response.json()).to.have.lengthOf(2));",
+              "pm.collectionVariables.set(\"transactionId\", pm.response.json()[0].txnId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit Customer History",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/audit/transactions?customerId={{customerId}}&accountId={{accountId}}&from=2020-01-01T00:00:00Z&to=2100-01-01T00:00:00Z"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Two money operations\", () => pm.expect(pm.response.json()).to.have.lengthOf(2));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit Transaction By ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/audit/transactions/{{transactionId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Transaction belongs to customer\", () => pm.expect(pm.response.json().customerId).to.eql(pm.collectionVariables.get(\"customerId\")));"
             ]
           }
         }
@@ -457,6 +572,205 @@
             "type": "text/javascript",
             "exec": [
               "pm.test(\"Status 409\", () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reach Premium",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/accounts/{{secondAccountId}}/deposit",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": \"9925.00\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Premium Customer Search",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/customers?search={{email}}&category=PREMIUM"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Premium combined balance\", () => { const customer = pm.response.json().find(c => c.customerId === pm.collectionVariables.get(\"customerId\")); pm.expect(customer.totalBalance).to.eql(\"10000.00\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Premium Notifications",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/customers/{{customerId}}/notifications?kind=PREMIUM_MARKETING"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"One premium message\", () => pm.expect(pm.response.json()).to.have.lengthOf(1));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Disable Marketing",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/customers/{{customerId}}/preferences",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"marketingEnabled\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Leave Premium",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/accounts/{{secondAccountId}}/withdraw",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": \"9925.00\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Low Balance Alerts",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/customers/{{customerId}}/notifications?kind=LOW_BALANCE_ALERT"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Initial plus two low entries\", () => pm.expect(pm.response.json()).to.have.lengthOf(3));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Marketing History",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/customers/{{customerId}}/notifications?kind=LOW_BALANCE_MARKETING"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Opt-out prevents third marketing message\", () => pm.expect(pm.response.json()).to.have.lengthOf(2));"
             ]
           }
         }
@@ -570,6 +884,31 @@
             "type": "text/javascript",
             "exec": [
               "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit After Closure",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/audit/transactions?customerId={{customerId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Five operations retained\", () => pm.expect(pm.response.json()).to.have.lengthOf(5));"
             ]
           }
         }

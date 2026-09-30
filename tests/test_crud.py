@@ -6,10 +6,7 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
-@pytest.fixture
-def client():
-    with TestClient(create_app()) as client:
-        yield client
+pytestmark = pytest.mark.integration
 
 
 def customer(client, email="moataz@example.com", name="Moataz Hikal"):
@@ -40,7 +37,7 @@ def test_customer_crud(client):
     assert deleted.status_code == 204 and deleted.content == b""
     assert client.get(url).status_code == 404
     assert client.get("/api/customers").json() == []
-    assert customer(client, "moataz.updated@example.com")["customerId"] > original["customerId"]
+    assert client.post("/api/customers", json={"name":"Moataz Hikal","email":"moataz.updated@example.com"}).status_code == 409
 
 
 def test_one_customer_many_accounts_and_name_edit(client):
@@ -72,41 +69,41 @@ def test_account_crud_and_deletion_rules(client):
     deleted = client.delete(url)
     assert deleted.status_code == 204 and deleted.content == b""
     assert client.get(url).status_code == 404
-    assert client.get(url + "/transactions").status_code == 404
+    assert len(client.get(url + "/transactions").json()) == 2
     assert client.get(f"/api/customers/{id}/accounts").json() == []
     assert client.delete(f"/api/customers/{id}").status_code == 204
 
 
 def test_deleted_ids_never_overwrite_survivors(client):
-    # Deleting an early record must not make the next ID collide with a later one.
     customers = [customer(client, f"person{i}@example.com") for i in range(3)]
     client.delete(f"/api/customers/{customers[0]['customerId']}")
-    assert customer(client, "new@example.com")["customerId"] == 4
-    assert client.get("/api/customers/3").json() == customers[2]
-    accounts = [account(client, 3) for _ in range(3)]
+    assert customer(client, "new@example.com")["customerId"] not in {c['customerId'] for c in customers}
+    survivor = customers[2]['customerId']
+    assert client.get(f"/api/customers/{survivor}").json() == customers[2]
+    accounts = [account(client, survivor) for _ in range(3)]
     client.delete(f"/api/accounts/{accounts[0]['accountId']}")
-    assert account(client, 3)["accountId"] == 4
-    assert client.get("/api/accounts/3").json() == accounts[2]
+    assert account(client, survivor)["accountId"] not in {a['accountId'] for a in accounts}
+    assert client.get(f"/api/accounts/{accounts[2]['accountId']}").json() == accounts[2]
 
 
 def test_edit_email_uniqueness_and_index_cleanup(client):
-    customer(client)
-    customer(client, "second@example.com")
-    response = client.put("/api/customers/2", json={"name": "Moataz Hikal", "email": "MOATAZ@example.com"})
+    first = customer(client)['customerId']
+    second = customer(client, "second@example.com")['customerId']
+    response = client.put(f"/api/customers/{second}", json={"name":"Moataz Hikal","email":"MOATAZ@example.com"})
     assert response.status_code == 409
-    assert client.get("/api/customers/2").json()["email"] == "second@example.com"
-    assert client.put("/api/customers/1", json={"name": "Moataz Hikal", "email": "MOATAZ@example.com"}).status_code == 200
-    assert client.put("/api/customers/1", json={"name": "Moataz Hikal", "email": "new@example.com"}).status_code == 200
-    assert customer(client)["customerId"] == 3
+    assert client.get(f"/api/customers/{second}").json()['email'] == 'second@example.com'
+    assert client.put(f"/api/customers/{first}", json={"name":"Moataz Hikal","email":"MOATAZ@example.com"}).status_code == 200
+    assert client.put(f"/api/customers/{first}", json={"name":"Moataz Hikal","email":"new@example.com"}).status_code == 200
+    assert customer(client)['customerId'] not in {first, second}
 
 
 @pytest.mark.parametrize("method,path,body", [
-    ("GET", "/api/customers/999", None),
-    ("GET", "/api/customers/999/accounts", None),
-    ("PUT", "/api/customers/999", {"name": "Moataz Hikal", "email": "none@example.com"}),
-    ("DELETE", "/api/customers/999", None),
-    ("PUT", "/api/accounts/999", {"accountType": "CURRENT"}),
-    ("DELETE", "/api/accounts/999", None),
+    ("GET", "/api/customers/000000000000000000000999", None),
+    ("GET", "/api/customers/000000000000000000000999/accounts", None),
+    ("PUT", "/api/customers/000000000000000000000999", {"name": "Moataz Hikal", "email": "none@example.com"}),
+    ("DELETE", "/api/customers/000000000000000000000999", None),
+    ("PUT", "/api/accounts/000000000000000000000999", {"accountType": "CURRENT"}),
+    ("DELETE", "/api/accounts/000000000000000000000999", None),
 ])
 def test_crud_missing_resources(client, method, path, body):
     assert client.request(method, path, json=body).status_code == 404
@@ -117,16 +114,16 @@ def test_crud_missing_resources(client, method, path, body):
                                       {"name": "Moataz Hikal", "email": "moataz@example.com", "customerId": 9}])
 def test_customer_edit_validation(client, body):
     original = customer(client)
-    assert client.put("/api/customers/1", json=body).status_code == 422
-    assert client.get("/api/customers/1").json() == original
+    assert client.put(f"/api/customers/{original['customerId']}", json=body).status_code == 422
+    assert client.get(f"/api/customers/{original['customerId']}").json() == original
 
 
 @pytest.mark.parametrize("body", [{}, {"accountType": " "}, {"accountType": "x" * 51},
     {"accountType": "CURRENT", "balance": 999}, {"accountType": "CURRENT", "customerId": 2}])
 def test_account_edit_rejects_invalid_fields(client, body):
     original = account(client, customer(client)["customerId"])
-    assert client.put("/api/accounts/1", json=body).status_code == 422
-    assert client.get("/api/accounts/1").json() == original
+    assert client.put(f"/api/accounts/{original['accountId']}", json=body).status_code == 422
+    assert client.get(f"/api/accounts/{original['accountId']}").json() == original
 
 
 def test_legacy_users_share_customer_records(client):

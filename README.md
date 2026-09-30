@@ -1,261 +1,291 @@
-<div align="center">
-
-<img src="assets/paper-maker-logo.png" alt="Paper Maker Banking App logo featuring the Monopoly Man holding banknotes" width="320" />
-
-# Paper Maker Banking App
-
-**Python · FastAPI · In-memory storage**
-
-Backend REST API Without DB
-
-[Setup](#run-it-locally) · [Example](#a-small-banking-session) · [Endpoints](#the-api-at-a-glance) · [Initialization](#steps-to-initialize-this-branch-of-the-app)
-
-</div>
-
----
-
-Paper Maker Banking App is a FastAPI backend for managing customers and their
-accounts. It supports deposits, withdrawals, and a transaction history for each
-account. Customer, account, and transaction records live in memory, so the app
-runs without a database connection.
-
-One customer can open several accounts. Each account starts at zero, and every
-successful deposit or withdrawal leaves a transaction record. The controllers,
-services, and repositories handle HTTP requests, business rules, and storage
-respectively.
-
-> **A note about memory:** restarting the server clears the data. Start the API
-> once with the command below and use sample customers. It runs as a single server
-> process, so all requests use the same in-memory records. Multiple server processes
-> would each have separate records. There is no login or persistent storage.
-
-## A small banking session
-
-Example requests against a new account:
-
-| Action | Money in | Money out | Balance |
-| :--- | ---: | ---: | ---: |
-| Open Moataz Hikal's savings account | — | — | 0.00 |
-| Make a deposit | 100.00 | — | 100.00 |
-| Make a withdrawal | — | 25.00 | 75.00 |
-| Try to withdraw 76.00 | — | Rejected | 75.00 |
-
-That last request returns **400: Insufficient funds**. It does not change the
-balance or add a transaction. The [Postman collection](postman/Banking-App.postman_collection.json)
-walks through this example, customer/account edits, a second account, and cleanup.
-
-## Run it locally
-
-You will need **Python 3.10 or newer** and Git.
-
-```sh
-git clone --branch 1_backend-rest-api-without-db https://github.com/RootMoataz/Paper-Maker-Banking-App.git
-cd Paper-Maker-Banking-App
-python -m venv .venv
-```
-
-Activate the environment:
-
-| Your terminal | Command |
-| :--- | :--- |
-| Windows PowerShell | `.venv\Scripts\Activate.ps1` |
-| macOS / Linux | `source .venv/bin/activate` |
-
-Then install the requirements and start the API:
-
-```sh
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --reload
-```
-
-Open **[Swagger UI](http://127.0.0.1:8000/docs)**, expand an endpoint, and choose
-**Try it out**. The OpenAPI schema is at `/openapi.json`; ReDoc is at `/redoc`.
-Saving a code change while `--reload` is running also resets the in-memory data.
-
-<details>
-<summary>PowerShell won't activate the environment?</summary>
-
-You can run Python directly from the environment without changing your execution
-policy:
-
-```powershell
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\python.exe -m uvicorn app.main:app --reload
-```
-
-</details>
-
-## The API at a glance
-
-All paths start with `/api`. Customer and account IDs come from the API; use the
-returned IDs in later requests.
-
-### Customers
-
-| Method | Path | What it does | Success |
-| :--- | :--- | :--- | :--- |
-| GET | `/customers` | Get all customers | 200 |
-| POST | `/customers` | Create a customer | 201 |
-| GET | `/customers/{id}` | Find one customer | 200 |
-| PUT | `/customers/{id}` | Replace their name and email | 200 |
-| DELETE | `/customers/{id}` | Delete a customer who has no accounts | 204 |
-| GET | `/customers/{id}/accounts` | List the accounts they own | 200 |
-
-Create or edit a customer with both fields:
-
-```json
-{
-  "name": "Moataz Hikal",
-  "email": "moataz@example.com"
-}
-```
-
-Names cannot be blank. Emails must be valid and unique, ignoring letter case.
-Editing a customer's name also updates the name shown on their accounts.
-
-### Accounts and money
-
-| Method | Path | What it does | Success |
-| :--- | :--- | :--- | :--- |
-| GET | `/accounts` | Get all accounts | 200 |
-| POST | `/accounts` | Open an account for an existing customer | 201 |
-| GET | `/accounts/{id}` | Get account details and balance | 200 |
-| PUT | `/accounts/{id}` | Change the account type | 200 |
-| DELETE | `/accounts/{id}` | Delete an account with a zero balance | 204 |
-| POST | `/accounts/{id}/deposit` | Add money | 200 |
-| POST | `/accounts/{id}/withdraw` | Take money out | 200 |
-| GET | `/accounts/{id}/transactions` | Get transaction history, oldest first | 200 |
-
-Open an account using the `customerId` returned when you created the customer:
-
-```json
-{
-  "customerId": 1,
-  "accountType": "SAVINGS"
-}
-```
-
-An account edit takes only `{"accountType":"CURRENT"}`. Types are nonblank
-strings up to 50 characters, such as SAVINGS or CURRENT.
-Ownership cannot be reassigned, and balance changes go through deposit or
-withdrawal rather than account edits.
-
-Both money operations take the same body:
-
-```json
-{
-  "amount": "25.00"
-}
-```
-
-JSON numbers are accepted too. Money uses Python's `Decimal` and comes back as
-a decimal string, which keeps values such as `0.10 + 0.20` exact.
-
-<details>
-<summary>Example account response after the banking session</summary>
-
-```json
-{
-  "accountId": 1,
-  "customerId": 1,
-  "userId": 1,
-  "userName": "Moataz Hikal",
-  "accountType": "SAVINGS",
-  "balance": "75.00",
-  "createdAt": "2026-09-29T12:00:00Z"
-}
-```
-
-`customerId` and `userId` refer to the same person. Use `customerId` with the
-customer endpoints. `userId` and `POST /api/users` are kept for compatibility
-with the original API contract.
-
-</details>
-
-## The rules behind the responses
-
-| Situation | Result |
-| :--- | :--- |
-| Deposit or withdrawal is zero, negative, non-finite, or has fractions of a cent | **422** |
-| Withdrawal is larger than the balance | **400** |
-| Deposit would push the balance above 99,999,999.99 | **400** |
-| Customer or account does not exist | **404** |
-| Email already belongs to a customer | **409** |
-| Customer still owns accounts when deletion is requested | **409** |
-| Account still has money when deletion is requested | **409** |
-| Required fields are missing, extra fields are supplied, or JSON/IDs are invalid | **422** |
-
-Amounts are limited to 99,999,999.99, matching the brief's `DECIMAL(10,2)` field.
-Larger input amounts return 422. Business errors return `{"detail":"message"}`;
-validation errors return FastAPI's `detail` array with the affected fields.
-
-A successful deposit or withdrawal records `txnId`, `accountId`, `type`, `amount`,
-and `date` in UTC. New accounts have an empty history. Failed operations leave
-both the balance and history untouched.
-
-For deletion, work from the account back to the customer: withdraw any remaining
-balance, delete the accounts, then delete the customer. Successful deletes return
-204 with no body. Account deletion also removes its history in this in-memory
-exercise. Deleted IDs are never reused during the same server run.
-
-## Current Architecture of the Branch
-
-### Record Relationships
-
-One customer can own multiple accounts, and each account can have multiple transactions.
-
-```mermaid
-flowchart LR
-    C[Customer] --> O[owns many] --> A[Account]
-    A --> R[records many] --> T[Transaction]
-    classDef relationship fill:none,stroke:none;
-    class O,R relationship;
-```
-
-### Code Structure
-
-The files below handle requests, business rules, storage, validation, and tests.
-
-| File | Responsibility |
-| :--- | :--- |
-| [`app/main.py`](app/main.py) | HTTP routes, response codes, and Swagger descriptions |
-| [`app/models.py`](app/models.py) | Request validation and response fields |
-| [`app/services.py`](app/services.py) | Customer/account operations and money rules |
-| [`app/repositories.py`](app/repositories.py) | In-memory records and ID counters |
-| [`tests/`](tests/) | Behavior checks, including the collection workflow |
-
-Requests move from controller to service to repository. `CustomerService` handles
-customer CRUD; `AccountService` handles accounts, deposits, withdrawals, and
-history. A shared lock keeps concurrent balance checks and updates together.
-Each application instance gets its own store.
-
-The [dependency map](docs/dependencies.md) shows the record relationships and
-explains why accounts must be deleted before their customer.
-
-## Steps to initialize this branch of the App
-
-```sh
-python -m pip install -r requirements-dev.txt
-python -m pytest -q
-```
-
-The suite contains **62 tests**:
-
-| File | Tests | Coverage |
-| :--- | ---: | :--- |
-| `test_api.py` | 38 | Money operations, rejected requests, history, and concurrent withdrawals |
-| `test_crud.py` | 23 | Customer/account CRUD, ownership, email uniqueness, deletion, and API schemas |
-| `test_postman_collection.py` | 1 | The collection's 21 requests in their saved order |
-
-`requirements-lock.txt` records the tested dependency versions. Install it instead
-of `requirements-dev.txt` to use those exact versions.
-
-For a walkthrough, follow the [Swagger test steps](docs/swagger-testing.md), or
-import the [Postman collection](postman/Banking-App.postman_collection.json) and run
-it in its stored order. The collection creates a fresh email, captures IDs, and
-cleans up its sample records at the end.
-
-The tests send requests directly to the app through FastAPI's TestClient. They
-check the Postman request sequence and the Swagger schema, but do not launch
-either application's interface. See [test coverage](docs/swagger-testing.md#test-coverage)
-for the checks performed and their limits.
+<div align="center">
+
+<img src="assets/paper-maker-logo.png" alt="Paper Maker Banking App logo featuring the Monopoly Man holding banknotes" width="320" />
+
+# Paper Maker Banking App
+
+**Python · FastAPI · MongoDB Atlas**
+
+Backend REST API with MongoDB Atlas
+
+[Setup](#steps-to-initialize-this-branch-of-the-app) · [API](#the-api-at-a-glance) · [Messages](#customer-categories-and-messages) · [Architecture](#current-architecture-of-the-branch)
+
+</div>
+
+---
+
+Paper Maker Banking App manages customers, their accounts, and the money moving
+in and out. This branch stores records in MongoDB Atlas, so restarting the API
+keeps balances and transaction history. The original in-memory milestone remains
+on `1_backend-rest-api-without-db`.
+
+One customer can own several accounts. Every account starts at zero. A deposit
+or withdrawal saves the account balance, combined customer balance, transaction,
+and any triggered messages together in one database transaction.
+
+This workshop backend has no login or protected routes. Use sample customers.
+Notifications are stored for retrieval through the API; they are not sent by
+email or push, and loan messages do not indicate loan eligibility or approval.
+
+## Steps to initialize this branch of the App
+
+Use Python 3.10 or newer, Git, and an Atlas cluster with a database user that can
+read and write the chosen database and create its indexes. Allow your machine's
+IP in Atlas Network Access.
+
+```sh
+git clone --branch 2_backend-rest-api-mongodb-atlas https://github.com/RootMoataz/Paper-Maker-Banking-App.git
+cd Paper-Maker-Banking-App
+python -m venv .venv
+```
+
+Activate the environment:
+
+| Terminal | Command |
+| --- | --- |
+| Windows PowerShell | `.venv\Scripts\Activate.ps1` |
+| macOS / Linux | `source .venv/bin/activate` |
+
+```sh
+python -m pip install -r requirements.txt
+```
+
+Copy `.env.example` to `.env` and fill in your connection details locally:
+
+```dotenv
+MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@YOUR-CLUSTER.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DATABASE=paper_maker
+```
+
+Use a URL-encoded password if it contains characters reserved in URLs. `.env` and
+its local variants are ignored by Git. `.env.example` contains placeholders only.
+Never paste a working connection string into README, Postman, or a commit.
+
+```sh
+python -m uvicorn app.main:app --reload
+```
+
+Open [Swagger UI](http://127.0.0.1:8000/docs). The schema is at `/openapi.json` and
+ReDoc is at `/redoc`. Startup checks the database and creates the required indexes.
+An unavailable database stops startup; there is no in-memory fallback.
+
+If PowerShell cannot activate the environment, invoke Python directly:
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+```
+
+MongoDB must support transactions: Atlas or a local replica set works; a standalone
+local MongoDB server does not. Multiple API processes use the same persisted data.
+
+## A small banking session
+
+Create a customer:
+
+```json
+{"name": "Moataz Hikal", "email": "moataz@example.com"}
+```
+
+Use the returned `customerId` to open an account:
+
+```json
+{"customerId": "507f1f77bcf86cd799439011", "accountType": "SAVINGS"}
+```
+
+The ID above illustrates the format. Always use the ID returned by your API.
+All IDs are MongoDB ObjectId strings, including `accountId` and `txnId`.
+`userId` remains an alias for `customerId`, and `POST /api/users` still works.
+
+| Action | Money in | Money out | Account balance |
+| --- | ---: | ---: | ---: |
+| Open account | — | — | 0.00 |
+| Deposit | 100.00 | — | 100.00 |
+| Withdraw | — | 25.00 | 75.00 |
+| Withdraw 76.00 | — | Rejected | 75.00 |
+
+Both deposit and withdrawal accept `{"amount":"25.00"}`. JSON numbers work too.
+Money is validated with Decimal, stored as integer cents, and returned as a
+string with two decimal places. A rejected operation leaves all records unchanged.
+
+## The API at a glance
+
+All paths below start with `/api`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST / GET | `/customers` | Create or list/search active customers |
+| GET / PUT / DELETE | `/customers/{id}` | Read, edit, or archive a customer |
+| GET | `/customers/{id}/accounts` | List their active accounts |
+| PATCH | `/customers/{id}/preferences` | Change `marketingEnabled` |
+| GET | `/customers/{id}/notifications` | Retrieve stored messages |
+| POST / GET | `/accounts` | Open or list active accounts |
+| GET / PUT / DELETE | `/accounts/{id}` | Read, edit type, or close an account |
+| POST | `/accounts/{id}/deposit` | Deposit a positive amount |
+| POST | `/accounts/{id}/withdraw` | Withdraw up to the current balance |
+| GET | `/accounts/{id}/transactions` | History, including closed accounts |
+| GET | `/audit/transactions` | Search history by customer, account, and date |
+| GET | `/audit/transactions/{id}` | Retrieve a transaction by its ID |
+
+Creating a record returns 201, reading/editing returns 200, and successful
+closure/archival returns 204. PUT customer requires both name and email;
+PUT account accepts only `accountType`. Balance and ownership cannot be edited.
+
+### Search and pagination
+
+`GET /api/customers?search=moataz&category=PREMIUM` searches literal name/email
+text, ignoring case. Categories use the combined balance of the customer's accounts.
+Customer responses include `totalBalance`, `category`, and `marketingEnabled`.
+
+List endpoints accept `offset` (default 0) and `limit` (default 50, maximum 100).
+Responses remain arrays. Customers/accounts are oldest first, transactions oldest
+first, and notifications newest first, with ObjectId breaking timestamp ties.
+Pagination is not a frozen snapshot while other requests change records.
+
+### Transaction audit
+
+Example filter:
+
+```text
+/api/audit/transactions?customerId=RETURNED_ID&from=2026-09-01T00:00:00Z&to=2026-10-01T00:00:00Z
+```
+
+Add `accountId` to narrow it further. Filters combine with AND. Dates must include
+a timezone; `from` is inclusive and `to` exclusive. Equal or reversed ranges
+return 422. Transactions retain customerId, accountId, type, amount, resulting
+account balance, and UTC date. MongoDB stores timestamps with millisecond precision.
+
+## Customer categories and messages
+
+| Category | Combined balance | On entry |
+| --- | --- | --- |
+| LOW | Below 100.00 | Balance alert; loan-options marketing if opted in |
+| STANDARD | 100.00 to below 10,000.00 | No message |
+| PREMIUM | 10,000.00 or more | Premium welcome/benefits marketing if opted in |
+
+Marketing starts disabled. Enable it with:
+
+```http
+PATCH /api/customers/RETURNED_ID/preferences
+Content-Type: application/json
+
+{"marketingEnabled": true}
+```
+
+A customer with no accounts receives no messages. Opening their first account
+creates the initial low-balance alert and any opted-in marketing. Further
+zero-balance accounts do not repeat it.
+
+After that, messages trigger only when the combined balance enters another
+category. Returning to LOW after leaving it can create a new alert; there is no
+time-based cooldown. Opting in does not backfill earlier marketing. Opting out
+stops future marketing while operational low-balance alerts remain active.
+
+Example low-balance marketing:
+
+> Explore available loan options and learn how to apply. Eligibility and approval depend on assessment.
+
+Use `GET /api/customers/{id}/notifications`, optionally filtered by `kind`:
+`LOW_BALANCE_ALERT`, `LOW_BALANCE_MARKETING`, or `PREMIUM_MARKETING`.
+Messages record their category version and triggering transaction when applicable.
+A unique index prevents duplicates from transaction retries. These are workshop
+templates; the app does not assess credit or offer specific loan products.
+
+## Money and record rules
+
+| Situation | Response |
+| --- | --- |
+| Zero, negative, non-finite, fractional-cent, or oversized amount | 422 |
+| Invalid ObjectId, missing/extra fields, or invalid date/filter | 422 |
+| Well-formed ID without an accessible record | 404 |
+| Withdrawal exceeds balance | 400 |
+| Deposit exceeds the 99,999,999.99 per-account balance limit | 400 |
+| Combined balance exceeds signed 64-bit cents storage | 400 |
+| Email already exists, ignoring case | 409 |
+| Close an account with money, or archive a customer with active accounts | 409 |
+| Database operation unavailable | 503, with sanitized details |
+
+To close an account, withdraw its remaining balance first. DELETE then marks it
+closed; history stays available. A customer can be archived after all their
+accounts are closed. Archived records are excluded from active CRUD/search,
+but audit records and email uniqueness are retained. This is archival, not erasure.
+
+Transactions synchronize competing operations for the same customer, including
+changes to different accounts and marketing preferences. Separate repeated HTTP
+requests are separate operations; this API does not implement idempotency keys.
+
+## Current Architecture of the Branch
+
+### Record Relationships
+
+```mermaid
+flowchart LR
+    C[Customer] --> O[owns many] --> A[Account]
+    A --> R[records many] --> T[Transaction]
+    C --> N[receives many] --> M[Stored notification]
+    classDef relationship fill:none,stroke:none;
+    class O,R,N relationship;
+```
+
+### Code Structure
+
+```mermaid
+flowchart TD
+    Client[Swagger or Postman] --> Routes[Customer, account and reporting controllers]
+    Routes --> Services[Banking and audit services]
+    Services --> Policy[Category and message rules]
+    Services --> Repositories[Repositories]
+    Repositories --> Atlas[(MongoDB Atlas)]
+```
+
+| File | Responsibility |
+| --- | --- |
+| `app/main.py` | App lifecycle and shared error handling |
+| `app/routes.py` | Customer/account controllers |
+| `app/reporting_routes.py` | Audit, preferences, and notifications controllers |
+| `app/services.py` | Banking rules and transaction orchestration |
+| `app/repositories.py` | Customer/account database operations |
+| `app/audit.py` | Transaction storage and history queries |
+| `app/notifications.py` | Category rules, templates, and stored notifications |
+| `app/models.py` | Input validation and response models |
+| `app/config.py`, `app/database.py` | Local settings, connections, indexes, sessions |
+
+The [dependency map](docs/dependencies.md) explains transaction boundaries and
+record retention.
+
+## Tests and demonstration
+
+```sh
+python -m pip install -r requirements-dev.txt
+python -m pytest -m "not integration" -q
+```
+
+Integration tests need a separate transaction-capable database. Add these locally:
+
+```dotenv
+MONGODB_TEST_URI=mongodb://127.0.0.1:27018/?replicaSet=paperMakerTest
+MONGODB_TEST_DATABASE=paper_maker_test_local
+```
+
+For Atlas tests, use a separate test URI/database with sufficient permissions.
+The database prefix must begin with `paper_maker_test_` and differ from the
+application database. Fixtures append a random suffix and delete only their own
+generated databases. Never use customer data for tests.
+
+```sh
+python -m pytest -m integration -q
+python -m pytest -q
+```
+
+Without test configuration, integration tests are explicitly skipped. A skipped
+run does not verify persistence. `requirements-lock.txt` records the tested versions.
+
+Import the [Postman collection](postman/Banking-App.postman_collection.json) for
+the complete workflow, or follow the [Swagger walkthrough](docs/swagger-testing.md).
+The collection generates a fresh sample email and captures IDs. Its final cleanup
+archives sample records while retaining audit history.
+
+The automated collection replay exercises HTTP requests and response values; it
+does not launch Postman or execute its JavaScript. Tests cover precision, limits,
+concurrency, rollback, retry duplicates, category boundaries, preferences, audit
+filters, and record retention. Live Atlas verification is separate from local
+replica-set integration testing.

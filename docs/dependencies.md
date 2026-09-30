@@ -1,69 +1,43 @@
-# Customer and account dependencies
+# Records and code dependencies
 
-```mermaid
-erDiagram
-    CUSTOMER ||--o{ ACCOUNT : owns
-    ACCOUNT ||--o{ TRANSACTION : records
-    CUSTOMER {
-        int customerId PK
-        string name
-        string email UK
-        datetime createdAt
-    }
-    ACCOUNT {
-        int accountId PK
-        int customerId FK
-        string accountType
-        decimal balance
-        datetime createdAt
-    }
-    TRANSACTION {
-        int txnId PK
-        int accountId FK
-        string type
-        decimal amount
-        datetime date
-    }
-```
+A customer owns accounts, an account records transactions, and a customer receives
+stored notifications. ObjectId references connect the four Atlas collections.
+Customers and accounts are archived rather than erased when DELETE succeeds.
 
-- A customer may own zero, one, or many accounts.
-- An account must refer to one existing customer; unknown ownership returns 404.
-- Each transaction belongs to one account and records a successful deposit or withdrawal.
-- Customer deletion is blocked while any account refers to them (409).
-- Account deletion requires a zero balance (409 otherwise). It removes the
-  account and its in-memory transaction records. Customer and account IDs are
-  assigned from counters that keep increasing. Deleting account 1 does not let a
-  new account reuse its ID or overwrite another account.
-- Account ownership is immutable. Customer names/emails can change without
-  changing IDs or ownership. Account display names reflect customer edits.
+Controllers in `routes.py` and `reporting_routes.py` validate input through
+`models.py`, then call services. `main.py` owns startup/shutdown and safe error
+responses. Each process creates one MongoClient and shares its connection pool.
 
-## Application dependencies
+`services.py` uses customer/account repositories, the transaction repository in
+`audit.py`, and notification policy/storage in `notifications.py`. Repositories
+accept the caller's session; they do not commit transactions independently.
 
-```mermaid
-flowchart TD
-    Swagger[Swagger UI or Postman] --> Routes[FastAPI controllers]
-    Routes --> Validation[Pydantic request models]
-    Routes --> Customers[CustomerService]
-    Routes --> Accounts[AccountService]
-    Customers --> Users[UserRepository: customer records]
-    Customers --> AccountRepo[AccountRepository]
-    Accounts --> Users
-    Accounts --> AccountRepo
-    Accounts --> Transactions[TransactionRepository]
-    Users --> Memory[MemoryStore and shared lock]
-    AccountRepo --> Memory
-    Transactions --> Memory
-```
+## A deposit or withdrawal
 
-The original project calls customers "users" in its storage model. Both API
-names share the same repository and IDs. New clients should use `/api/customers`
-and `customerId`; `POST /api/users` and `userId` are compatibility interfaces.
+1. Find the active account and write its customer document to coordinate competing operations.
+2. Check and update the account balance using a conditional database update.
+3. Update the combined customer balance and category.
+4. Insert the immutable money transaction.
+5. On category entry, insert the operational alert and any opted-in marketing.
+6. Commit everything together. Any failure aborts the entire operation.
 
-Deposit and withdrawal both use `AccountService._transact`. It checks the balance,
-calculates the new amount, and appends a transaction while holding the same lock.
-For example, two simultaneous withdrawals cannot both spend the last 100 in an
-account: the second request sees the balance left by the first.
+Customer preference edits, account creation/closure, and customer archival also
+write the customer document. This makes conflicting operations retry against the
+new state rather than calculate from an outdated total or preference.
 
-Dependencies: FastAPI supplies routing and Swagger, Pydantic validates requests,
-Uvicorn serves HTTP, and pytest/HTTPX exercise endpoints. The lock and Decimal
-arithmetic are from Python's standard library.
+PyMongo may repeat a transaction callback after a transient conflict. Callbacks
+perform only database work, and the notification uniqueness key is customerId,
+categoryVersion, and kind. No email or push calls happen inside or outside them.
+
+## Stored values and indexes
+
+Money uses integer cents in MongoDB and Decimal strings at the HTTP boundary.
+Customer totals are maintained in the same transactions as account changes.
+Account display names are read from the current customer record.
+
+Startup creates the normalized-email unique index, account ownership indexes,
+transaction customer/account/date indexes, and notification uniqueness and date
+indexes. There is no SQL script for this Atlas milestone.
+
+Audit history can be queried after account closure or customer archival. Active
+CRUD endpoints omit those records. Email uniqueness is retained after archival.
