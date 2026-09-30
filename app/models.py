@@ -69,6 +69,12 @@ class Account(Model):
 class Transaction(Model):
     txn_id: str
     account_id: str
+    customer_id: str
     type: Literal["DEPOSIT", "WITHDRAW"]
     amount: Decimal
+    balance_after: Decimal
     date: datetime
+
+
+# A replayed deposit or withdrawal returns its stored transaction when the account has since been deleted.
+MoneyResult = Account | Transaction

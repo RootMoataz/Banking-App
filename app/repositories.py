@@ -84,7 +84,7 @@ class TransactionRepository:
     def __init__(self, db: Database):
         self.collection = db.transactions
 
-    def insert(self, account: dict, kind: str, amount_cents: int, session: ClientSession) -> dict:
+    def insert(self, account: dict, kind: str, amount_cents: int, key: str | None, session: ClientSession) -> dict:
         """Record a balance change made in session; account is the account after that change."""
         # The caller must already have written this account in the same session (the balance update does), so changes
         # to one account commit one at a time and the newest record is visible here. Dating this one strictly after it
@@ -97,8 +97,15 @@ class TransactionRepository:
         record = {"accountId": account["_id"], "customerId": account["customerId"], "type": kind,
                   "amountCents": Int64(amount_cents), "balanceAfterCents": Int64(account["balanceCents"]),
                   "createdAt": created_at}
+        if key is not None:  # keyless records stay out of the idem_unique index, so they never collide
+            record["idempotencyKey"] = key
         self.collection.insert_one(record, session=session)
         return record
+
+    def by_key(self, account_oid: ObjectId, key: str, session: ClientSession | None = None) -> dict | None:
+        # The $type condition matches the idem_unique partial filter, so MongoDB can use that index.
+        return self.collection.find_one({"accountId": account_oid, "idempotencyKey": {"$eq": key, "$type": "string"}},
+                                        session=session)
 
     def for_account(self, account_oid: ObjectId) -> list[dict]:
         return list(self.collection.find({"accountId": account_oid}).sort([("createdAt", 1), ("_id", 1)]))
