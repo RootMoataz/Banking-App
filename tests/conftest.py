@@ -22,7 +22,9 @@ def _assert_test_db(name: str) -> None:
 def settings():
     if not os.environ.get("MONGODB_URI") and not dotenv_values(ROOT / ".env").get("MONGODB_URI"):
         raise RuntimeError("MONGODB_URI is not set")
-    test_settings = replace(load_settings(), mongodb_db=f"paper_maker_test_{uuid.uuid4().hex[:8]}")
+    # Thresholds are pinned (the documented defaults) so tests do not depend on a local .env.
+    test_settings = replace(load_settings(), mongodb_db=f"paper_maker_test_{uuid.uuid4().hex[:8]}",
+                            low_cents=10_000, premium_cents=1_000_000)
     _assert_test_db(test_settings.mongodb_db)
     return test_settings
 

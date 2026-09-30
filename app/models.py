@@ -78,3 +78,24 @@ class Transaction(Model):
 
 # A replayed deposit or withdrawal returns its stored transaction when the account has since been deleted.
 MoneyResult = Account | Transaction
+
+Category = Literal["LOW", "STANDARD", "PREMIUM"]
+
+
+class CustomerSummary(Model):
+    customer_id: str
+    name: str
+    email: str
+    total_balance: Decimal
+    category: Category
+
+
+class Alert(Model):
+    alert_id: str
+    customer_id: str
+    account_id: str
+    transaction_id: str
+    type: Literal["LOW_BALANCE", "HIGH_BALANCE"]
+    total_balance: Decimal
+    threshold: Decimal
+    created_at: datetime
