@@ -3,15 +3,9 @@
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from fastapi.testclient import TestClient
+from bson import ObjectId
 
-from app.main import create_app
-
-
-@pytest.fixture
-def client():
-    with TestClient(create_app()) as client:
-        yield client
+MISSING = str(ObjectId())  # well-formed, but never stored
 
 
 def account(client):
@@ -59,19 +53,19 @@ def test_overdraft_and_precision(client):
 
 
 @pytest.mark.parametrize("method,path,body", [
-    ("GET", "/api/accounts/99", None),
-    ("GET", "/api/accounts/99/transactions", None),
-    ("POST", "/api/accounts/99/deposit", {"amount": 1}),
-    ("POST", "/api/accounts/99/withdraw", {"amount": 1}),
-    ("POST", "/api/accounts", {"userId": 99, "accountType": "SAVINGS"}),
+    ("GET", f"/api/accounts/{MISSING}", None),
+    ("GET", f"/api/accounts/{MISSING}/transactions", None),
+    ("POST", f"/api/accounts/{MISSING}/deposit", {"amount": 1}),
+    ("POST", f"/api/accounts/{MISSING}/withdraw", {"amount": 1}),
+    ("POST", "/api/accounts", {"userId": MISSING, "accountType": "SAVINGS"}),
 ])
 def test_missing_resources(client, method, path, body):
     assert client.request(method, path, json=body).status_code == 404
 
 
 @pytest.mark.parametrize("payload", [{}, {"userId": 0, "accountType": "SAVINGS"},
-    {"userId": True, "accountType": "SAVINGS"}, {"userId": 1, "accountType": " "},
-    {"userId": 1, "accountType": "x" * 51}, {"userId": 1, "accountType": "SAVINGS", "balance": 500}])
+    {"userId": True, "accountType": "SAVINGS"}, {"userId": MISSING, "accountType": " "},
+    {"userId": MISSING, "accountType": "x" * 51}, {"userId": MISSING, "accountType": "SAVINGS", "balance": 500}])
 def test_account_validation(client, payload):
     assert client.post("/api/accounts", json=payload).status_code == 422
 
@@ -92,14 +86,13 @@ def test_balance_limit(client):
     assert len(client.get(url + "/transactions").json()) == 1
 
 
-def test_account_isolation_and_restart(client):
+def test_account_isolation(client):
     id = account(client)
-    second = client.post("/api/accounts", json={"userId": 1, "accountType": "CURRENT"}).json()["accountId"]
+    owner = client.get(f"/api/accounts/{id}").json()["userId"]
+    second = client.post("/api/accounts", json={"userId": owner, "accountType": "CURRENT"}).json()["accountId"]
     client.post(f"/api/accounts/{id}/deposit", json={"amount": 10})
     assert client.get(f"/api/accounts/{second}").json()["balance"] == "0.00"
     assert client.get(f"/api/accounts/{second}/transactions").json() == []
-    with TestClient(create_app()) as fresh:
-        assert fresh.get(f"/api/accounts/{id}").status_code == 404
 
 
 def test_concurrent_withdrawals_cannot_overdraw(client):
@@ -122,4 +115,4 @@ def test_docs_and_malformed_requests(client):
     assert client.get("/api/accounts/0").status_code == 422
     assert client.get("/api/accounts/abc").status_code == 422
     assert client.post("/api/accounts", content="{", headers={"Content-Type": "application/json"}).status_code == 422
-    assert client.post("/api/accounts/1/deposit", json={}).status_code == 422
+    assert client.post(f"/api/accounts/{MISSING}/deposit", json={}).status_code == 422
