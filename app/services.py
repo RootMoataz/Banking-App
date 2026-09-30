@@ -1,6 +1,8 @@
-"""Customer CRUD and search, account ownership, balance changes, and threshold alerts stored in MongoDB."""
+"""Customer CRUD and search, account ownership, balance changes, threshold alerts and the transaction audit, stored in
+MongoDB."""
 
 from collections.abc import Callable
+from datetime import datetime
 from decimal import Decimal
 
 from bson import ObjectId
@@ -8,8 +10,9 @@ from pymongo.client_session import ClientSession
 from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
 
+from .audit import decode_cursor, encode_cursor, fingerprint, utc
 from .config import Settings
-from .models import (Account, AccountCreate, AccountEdit, Alert, AmountRequest, Category, Customer,
+from .models import (Account, AccountCreate, AccountEdit, Alert, AmountRequest, AuditPage, Category, Customer,
                      CustomerSummary, MoneyResult, Transaction, User, UserCreate)
 from .money import MAX_CENTS, from_cents, to_cents
 from .repositories import AccountRepository, AlertRepository, CustomerRepository, TransactionRepository
@@ -254,3 +257,35 @@ class AccountService:
     def get_alerts(self, customer_oid: ObjectId | None, limit: int) -> list[Alert]:
         # Alerts outlive their customer, like transactions, so an unknown customer just has none.
         return [_alert(doc) for doc in self.alerts.list(customer_oid, limit)]
+
+    def audit(self, customer_id: str | None, account_id: str | None, start: datetime | None, end: datetime | None,
+              limit: int, cursor: str | None) -> AuditPage:
+        # No existence checks: records outlive their account and customer, so a deleted ID still has history.
+        if customer_id is None and account_id is None:
+            raise BankError(422, "Give customerId, accountId or both")
+        try:
+            fp = fingerprint(customer_id, account_id, start, end)
+        except ValueError:  # e.g. year 1 with a positive offset has no UTC equivalent
+            raise BankError(422, "from or to is out of range") from None
+        after = None
+        if cursor is not None:
+            try:
+                t, oid, cursor_fp = decode_cursor(cursor)
+            except ValueError:
+                raise BankError(422, "Malformed cursor") from None
+            if cursor_fp != fp:
+                raise BankError(422, "The cursor was issued for different filters")
+            after = (t, oid)
+        filters = {}
+        if customer_id is not None:
+            filters["customerId"] = ObjectId(customer_id)
+        if account_id is not None:
+            filters["accountId"] = ObjectId(account_id)
+        window = {op: utc(t) for op, t in (("$gte", start), ("$lt", end)) if t is not None}
+        if window:
+            filters["createdAt"] = window
+        docs = self.transactions.page(filters, after, limit + 1)  # the extra record only shows another page exists
+        items = docs[:limit]
+        more = len(docs) > limit
+        return AuditPage(items=[_transaction(doc) for doc in items],
+                         next_cursor=encode_cursor(items[-1]["createdAt"], items[-1]["_id"], fp) if more else None)
