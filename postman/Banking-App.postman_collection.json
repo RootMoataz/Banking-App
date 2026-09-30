@@ -23,6 +23,14 @@
     {
       "key": "email",
       "value": ""
+    },
+    {
+      "key": "idempotencyKey",
+      "value": ""
+    },
+    {
+      "key": "auditCursor",
+      "value": ""
     }
   ],
   "item": [
@@ -291,6 +299,57 @@
           {
             "key": "Content-Type",
             "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotencyKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/accounts/{{accountId}}/deposit",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": \"100.00\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"idempotencyKey\", \"deposit-\" + pm.variables.replaceIn(\"{{$guid}}\"));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Balance 100.00\", () => pm.expect(pm.response.json().balance).to.eql(\"100.00\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Retry Deposit (same Idempotency-Key)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotencyKey}}"
           }
         ],
         "url": "{{baseUrl}}/api/accounts/{{accountId}}/deposit",
@@ -311,7 +370,7 @@
             "type": "text/javascript",
             "exec": [
               "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
-              "pm.test(\"Balance 100.00\", () => pm.expect(pm.response.json().balance).to.eql(\"100.00\"));"
+              "pm.test(\"Replay returns the first result\", () => pm.expect(pm.response.json().balance).to.eql(\"100.00\"));"
             ]
           }
         }
@@ -386,6 +445,107 @@
             "exec": [
               "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
               "pm.test(\"Two transactions\", () => pm.expect(pm.response.json()).to.have.lengthOf(2));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search Customers",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/customers/search?email=updated.{{email}}&category=LOW"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"One LOW customer with 75.00\", () => {",
+              "  const r = pm.response.json();",
+              "  pm.expect(r).to.have.lengthOf(1);",
+              "  pm.expect(r[0].customerId).to.eql(pm.collectionVariables.get(\"customerId\"));",
+              "  pm.expect(r[0].totalBalance).to.eql(\"75.00\");",
+              "  pm.expect(r[0].category).to.eql(\"LOW\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Alerts",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/alerts?customerId={{customerId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"One LOW_BALANCE alert\", () => {",
+              "  const r = pm.response.json();",
+              "  pm.expect(r).to.have.lengthOf(1);",
+              "  pm.expect(r[0].type).to.eql(\"LOW_BALANCE\");",
+              "  pm.expect(r[0].totalBalance).to.eql(\"75.00\");",
+              "  pm.expect(r[0].threshold).to.eql(\"100.00\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit First Page",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/audit/transactions?customerId={{customerId}}&from=2020-01-01T00:00:00Z&limit=1"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"First page holds the deposit\", () => {",
+              "  const r = pm.response.json();",
+              "  pm.expect(r.items.map(t => t.type)).to.eql([\"DEPOSIT\"]);",
+              "  pm.expect(r.nextCursor).to.be.a(\"string\");",
+              "});",
+              "pm.collectionVariables.set(\"auditCursor\", pm.response.json().nextCursor);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit Next Page",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/audit/transactions?customerId={{customerId}}&from=2020-01-01T00:00:00Z&limit=1&cursor={{auditCursor}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Last page holds the withdrawal\", () => {",
+              "  const r = pm.response.json();",
+              "  pm.expect(r.items.map(t => t.type)).to.eql([\"WITHDRAW\"]);",
+              "  pm.expect(r.nextCursor).to.eql(null);",
+              "});"
             ]
           }
         }
@@ -570,6 +730,30 @@
             "type": "text/javascript",
             "exec": [
               "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit After Deletion",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/audit/transactions?customerId={{customerId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"History survives deletion\", () => {",
+              "  const r = pm.response.json();",
+              "  pm.expect(r.items.map(t => t.type)).to.eql([\"DEPOSIT\", \"WITHDRAW\", \"WITHDRAW\"]);",
+              "  pm.expect(new Set(r.items.map(t => t.accountId))).to.eql(new Set([pm.collectionVariables.get(\"accountId\")]));",
+              "});"
             ]
           }
         }
