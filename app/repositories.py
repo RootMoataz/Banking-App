@@ -1,5 +1,5 @@
 """MongoDB collections shared by the customer and account services."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from bson import Int64, ObjectId
 from pymongo import ReturnDocument
@@ -73,22 +73,32 @@ class AccountRepository:
     def rename_owner(self, customer_oid: ObjectId, name: str, session: ClientSession) -> None:
         self.collection.update_many({"customerId": customer_oid}, {"$set": {"customerName": name}}, session=session)
 
-    def inc(self, oid: ObjectId, delta_cents: int, cond: dict) -> dict | None:
+    def inc(self, oid: ObjectId, delta_cents: int, cond: dict, session: ClientSession) -> dict | None:
         """Change the balance only when cond still holds, and return the account after the change."""
         return self.collection.find_one_and_update(
             {"_id": oid, **cond}, {"$inc": {"balanceCents": Int64(delta_cents)}},
-            return_document=ReturnDocument.AFTER)
+            return_document=ReturnDocument.AFTER, session=session)
 
 
 class TransactionRepository:
     def __init__(self, db: Database):
         self.collection = db.transactions
 
-    def insert(self, account: dict, kind: str, amount_cents: int) -> None:
+    def insert(self, account: dict, kind: str, amount_cents: int, session: ClientSession) -> dict:
+        """Record a balance change made in session; account is the account after that change."""
+        # The caller must already have written this account in the same session (the balance update does), so changes
+        # to one account commit one at a time and the newest record is visible here. Dating this one strictly after it
+        # keeps (createdAt, _id) order equal to the balance order, even if the clock steps back or ObjectIds from
+        # another process sort differently.
+        latest = self.collection.find_one({"accountId": account["_id"]}, sort=[("createdAt", -1), ("_id", -1)],
+                                          session=session)
+        created_at = _now() if latest is None else max(_now(), latest["createdAt"] + timedelta(milliseconds=1))
         # Customer and account IDs are both kept, so the record outlives either one.
-        self.collection.insert_one({"accountId": account["_id"], "customerId": account["customerId"], "type": kind,
-                                    "amountCents": Int64(amount_cents),
-                                    "balanceAfterCents": Int64(account["balanceCents"]), "createdAt": _now()})
+        record = {"accountId": account["_id"], "customerId": account["customerId"], "type": kind,
+                  "amountCents": Int64(amount_cents), "balanceAfterCents": Int64(account["balanceCents"]),
+                  "createdAt": created_at}
+        self.collection.insert_one(record, session=session)
+        return record
 
     def for_account(self, account_oid: ObjectId) -> list[dict]:
         return list(self.collection.find({"accountId": account_oid}).sort([("createdAt", 1), ("_id", 1)]))
