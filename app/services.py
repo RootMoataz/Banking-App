@@ -8,7 +8,7 @@ from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
 
 from .models import (Account, AccountCreate, AccountEdit, AmountRequest,
-                     Customer, Transaction, User, UserCreate)
+                     Customer, MoneyResult, Transaction, User, UserCreate)
 from .money import MAX_CENTS, from_cents, to_cents
 from .repositories import AccountRepository, CustomerRepository, TransactionRepository
 
@@ -37,8 +37,9 @@ def _account(doc: dict) -> Account:
 
 
 def _transaction(doc: dict) -> Transaction:
-    return Transaction(txn_id=str(doc["_id"]), account_id=str(doc["accountId"]), type=doc["type"],
-                       amount=from_cents(doc["amountCents"]), date=doc["createdAt"])
+    return Transaction(txn_id=str(doc["_id"]), account_id=str(doc["accountId"]), customer_id=str(doc["customerId"]),
+                       type=doc["type"], amount=from_cents(doc["amountCents"]),
+                       balance_after=from_cents(doc["balanceAfterCents"]), date=doc["createdAt"])
 
 
 class CustomerService:
@@ -145,13 +146,13 @@ class AccountService:
             raise BankError(404, "Account not found")
         return _account(doc)
 
-    def deposit(self, account_oid: ObjectId, data: AmountRequest) -> Account:
-        return self._transact(account_oid, data, "DEPOSIT")
+    def deposit(self, account_oid: ObjectId, data: AmountRequest, key: str | None = None) -> MoneyResult:
+        return self._transact(account_oid, data, "DEPOSIT", key)
 
-    def withdraw(self, account_oid: ObjectId, data: AmountRequest) -> Account:
-        return self._transact(account_oid, data, "WITHDRAW")
+    def withdraw(self, account_oid: ObjectId, data: AmountRequest, key: str | None = None) -> MoneyResult:
+        return self._transact(account_oid, data, "WITHDRAW", key)
 
-    def _transact(self, account_oid: ObjectId, data: AmountRequest, kind: str) -> Account:
+    def _transact(self, account_oid: ObjectId, data: AmountRequest, kind: str, key: str | None) -> MoneyResult:
         # The database checks the bound and changes the balance in one update, so two
         # withdrawals can't spend the same money.
         cents = to_cents(data.amount)
@@ -161,19 +162,42 @@ class AccountService:
             delta, cond = cents, {"balanceCents": {"$lte": MAX_CENTS - cents}}
 
         # The balance change and its history record commit together or not at all.
-        def work(session: ClientSession) -> dict:
+        def work(session: ClientSession) -> tuple[str, dict]:
+            # First on every attempt: the driver may rerun this after another request with the key committed, and a
+            # replay must not depend on the account still existing or on the balance still passing the bound check.
+            if key is not None and (prior := self.transactions.by_key(account_oid, key, session)) is not None:
+                return "replay", prior
             account = self.accounts.get(account_oid, session)
             if account is None:
                 raise BankError(404, "Account not found")
             # Serializes this change with every other change to the customer's accounts and records.
-            self.customers.touch(account["customerId"], session)
+            if self.customers.touch(account["customerId"], session) is None:
+                raise BankError(500, "Account owner record is missing")
             after = self.accounts.inc(account_oid, delta, cond, session)
             if after is None:
                 raise BankError(400, "Insufficient funds" if kind == "WITHDRAW" else "Balance would exceed 99999999.99")
-            self.transactions.insert(after, kind, cents, session)
-            return after
+            self.transactions.insert(after, kind, cents, key, session)
+            return "done", after
 
-        return _account(_in_transaction(self.db, work))
+        try:
+            outcome, doc = _in_transaction(self.db, work)
+        except DuplicateKeyError:
+            # A request with the same key committed after this one's lookup; the unique index rejected this insert and
+            # the whole transaction aborted, so no money moved. Replay the committed one.
+            prior = self.transactions.by_key(account_oid, key) if key is not None else None
+            if prior is None:
+                raise
+            return self._replay(prior, kind, cents)
+        return self._replay(doc, kind, cents) if outcome == "replay" else _account(doc)
+
+    def _replay(self, prior: dict, kind: str, cents: int) -> MoneyResult:
+        if prior["type"] != kind or prior["amountCents"] != cents:
+            raise BankError(409, "Idempotency-Key was already used for a different request")
+        account = self.accounts.get(prior["accountId"])
+        if account is None:
+            return _transaction(prior)
+        # The balance this operation produced, not the live one.
+        return _account({**account, "balanceCents": prior["balanceAfterCents"]})
 
     def get_transactions(self, account_oid: ObjectId) -> list[Transaction]:
         self.get_account(account_oid)

@@ -4,16 +4,20 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from bson import ObjectId
-from fastapi import FastAPI, Path, Response
+from fastapi import FastAPI, Header, Path, Response
 from fastapi.responses import JSONResponse
 
 from .config import Settings, load_settings
 from .db import ensure_indexes, get_database
 from .models import (OBJECT_ID_PATTERN, Account, AccountCreate, AccountEdit, AmountRequest,
-                     Customer, Transaction, User, UserCreate)
+                     Customer, MoneyResult, Transaction, User, UserCreate)
 from .services import AccountService, BankError, CustomerService
 
 Id = Annotated[str, Path(pattern=OBJECT_ID_PATTERN, description="24-character hex ID")]
+IdempotencyKey = Annotated[str | None, Header(
+    alias="Idempotency-Key", min_length=1, max_length=200, pattern=r"^ *[\x21-\x7e][\x20-\x7e]*$",
+    description="Optional, up to 200 printable ASCII characters. Resending a key with the same request replays the "
+                "first result without moving money again; reusing it for a different request returns 409.")]
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -117,19 +121,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def get_account(id: Id):
         return app.state.accounts.get_account(ObjectId(id))
 
-    @app.post("/api/accounts/{id}/deposit", response_model=Account, tags=["Accounts"],
+    @app.post("/api/accounts/{id}/deposit", response_model=MoneyResult, tags=["Accounts"],
               responses={400: {"description": "Balance limit exceeded"},
-                         404: {"description": "Account not found"}})
-    def deposit(id: Id, data: AmountRequest):
-        """Add a positive amount and record the deposit. Fractions of a cent aren't accepted."""
-        return app.state.accounts.deposit(ObjectId(id), data)
+                         404: {"description": "Account not found"},
+                         409: {"description": "Idempotency-Key already used for a different request"}})
+    def deposit(id: Id, data: AmountRequest, key: IdempotencyKey = None):
+        """Add a positive amount and record the deposit. Fractions of a cent aren't accepted.
+        A replay returns the balance right after the original deposit, or its transaction record if the account
+        has since been deleted."""
+        return app.state.accounts.deposit(ObjectId(id), data, key)
 
-    @app.post("/api/accounts/{id}/withdraw", response_model=Account, tags=["Accounts"],
+    @app.post("/api/accounts/{id}/withdraw", response_model=MoneyResult, tags=["Accounts"],
               responses={400: {"description": "Insufficient funds"},
-                         404: {"description": "Account not found"}})
-    def withdraw(id: Id, data: AmountRequest):
-        """Take out a positive amount, up to the current balance, and record the withdrawal."""
-        return app.state.accounts.withdraw(ObjectId(id), data)
+                         404: {"description": "Account not found"},
+                         409: {"description": "Idempotency-Key already used for a different request"}})
+    def withdraw(id: Id, data: AmountRequest, key: IdempotencyKey = None):
+        """Take out a positive amount, up to the current balance, and record the withdrawal.
+        A replay returns the balance right after the original withdrawal, or its transaction record if the account
+        has since been deleted."""
+        return app.state.accounts.withdraw(ObjectId(id), data, key)
 
     @app.get("/api/accounts/{id}/transactions", response_model=list[Transaction],
              tags=["Transactions"], responses={404: {"description": "Account not found"}})
