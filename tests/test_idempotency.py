@@ -97,7 +97,8 @@ def test_replay_after_account_deleted_returns_transaction_record(client, db):
     body = replay.json()
     assert datetime.fromisoformat(body.pop("date")) == deposit["createdAt"]
     assert body == {"txnId": str(deposit["_id"]), "accountId": id, "customerId": owner, "type": "DEPOSIT",
-                    "amount": "25.00", "balanceAfter": "25.00"}
+                    "amount": "25.00", "balanceAfter": "25.00", "transferId": None, "fromAccountId": None,
+                    "toAccountId": None}
     assert post(client, id, "withdraw", "25.00", "key-2").json()["txnId"] == str(withdrawal["_id"])
     assert post(client, id, "withdraw", "25.00", "key-1").status_code == 409
     assert post(client, id, "deposit", "25.00", "key-3").status_code == 404  # a new key still needs the account
@@ -111,7 +112,8 @@ def test_deleted_account_replay_http_shape(client, db):
     assert client.delete(f"/api/accounts/{id}").status_code == 204
     replay = post(client, id, "deposit", "1.00", "key-1")
     assert replay.status_code == 200
-    assert set(replay.json()) == {"txnId", "accountId", "customerId", "type", "amount", "balanceAfter", "date"}
+    assert set(replay.json()) == {"txnId", "accountId", "customerId", "type", "amount", "balanceAfter", "date",
+                                  "transferId", "fromAccountId", "toAccountId"}
     spec = client.get("/openapi.json").json()
     for operation in ["deposit", "withdraw"]:
         route = spec["paths"]["/api/accounts/{id}/" + operation]["post"]
