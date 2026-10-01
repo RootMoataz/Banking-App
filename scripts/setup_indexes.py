@@ -11,7 +11,7 @@ from app.db import ensure_indexes, get_database  # noqa: E402
 def main() -> None:
     db = get_database(load_settings())
     ensure_indexes(db)
-    for name in ("customers", "accounts", "transactions", "alerts"):
+    for name in ("customers", "accounts", "transactions", "notifications"):
         print(name, sorted(i["name"] for i in db[name].list_indexes()))
 
 

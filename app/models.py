@@ -4,10 +4,11 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, computed_field
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, StrictBool, computed_field
 from pydantic.alias_generators import to_camel
 
 
+NO_CONTROL_CHARS = r"^[^\x00-\x1f\x7f]*$"  # a NUL in a search regex would reach MongoDB and come back as a 500
 OBJECT_ID_PATTERN = r"^[0-9a-fA-F]{24}$"
 ObjectIdStr = Annotated[str, Field(pattern=OBJECT_ID_PATTERN)]
 
@@ -18,29 +19,39 @@ class Model(BaseModel):
                               extra="forbid", str_strip_whitespace=True, frozen=True)
 
 
-class UserCreate(Model):
+class UserBase(Model):
+    # Unconstrained: responses must serialize stored names, including legacy ones with control characters.
     name: str = Field(min_length=1, max_length=100)
     email: EmailStr = Field(max_length=100)
 
 
-class User(UserCreate):
+class UserCreate(UserBase):
+    name: str = Field(min_length=1, max_length=100, pattern=NO_CONTROL_CHARS)
+
+
+class User(UserBase):
     user_id: str
     created_at: datetime
 
 
-class Customer(UserCreate):
+class Customer(UserBase):
     customer_id: str
     created_at: datetime
+    marketing_enabled: bool = False
+
+
+class Preferences(Model):
+    marketing_enabled: StrictBool
 
 
 class AccountEdit(Model):
-    account_type: str = Field(min_length=1, max_length=50)
+    account_type: str = Field(min_length=1, max_length=50, pattern=NO_CONTROL_CHARS)
 
 
 class AccountCreate(Model):
     user_id: ObjectIdStr = Field(validation_alias=AliasChoices("customerId", "userId", "user_id"))
     # Accept types such as SAVINGS and CURRENT without restricting clients to a fixed list.
-    account_type: str = Field(min_length=1, max_length=50)
+    account_type: str = Field(min_length=1, max_length=50, pattern=NO_CONTROL_CHARS)
 
 
 Money = Annotated[Decimal, Field(gt=0, max_digits=10, decimal_places=2,
@@ -48,6 +59,12 @@ Money = Annotated[Decimal, Field(gt=0, max_digits=10, decimal_places=2,
 
 
 class AmountRequest(Model):
+    amount: Money
+
+
+class TransferRequest(Model):
+    from_account_id: ObjectIdStr
+    to_account_id: ObjectIdStr
     amount: Money
 
 
@@ -70,14 +87,29 @@ class Transaction(Model):
     txn_id: str
     account_id: str
     customer_id: str
-    type: Literal["DEPOSIT", "WITHDRAW"]
+    # A transfer stores one record per account: TRANSFER_OUT on the source and TRANSFER_IN on the destination.
+    type: Literal["DEPOSIT", "WITHDRAW", "TRANSFER_OUT", "TRANSFER_IN"]
     amount: Decimal
-    balance_after: Decimal
+    balance_after: Decimal  # of this record's account
     date: datetime
+    # Set on both transfer records, null for deposits and withdrawals.
+    transfer_id: str | None = None
+    from_account_id: str | None = None
+    to_account_id: str | None = None
 
 
 # A replayed deposit or withdrawal returns its stored transaction when the account has since been deleted.
 MoneyResult = Account | Transaction
+
+
+class TransferResult(Model):
+    transfer_id: str
+    from_account_id: str
+    to_account_id: str
+    amount: Decimal
+    from_balance_after: Decimal
+    to_balance_after: Decimal
+    date: datetime  # the TRANSFER_OUT record's date
 
 
 class AuditPage(Model):
@@ -96,12 +128,17 @@ class CustomerSummary(Model):
     category: Category
 
 
-class Alert(Model):
-    alert_id: str
+# A low-balance alert is operational and always stored; the marketing kinds need the customer's opt-in.
+NotificationKind = Literal["LOW_BALANCE_ALERT", "LOW_BALANCE_MARKETING", "PREMIUM_MARKETING"]
+
+
+class Notification(Model):
+    notification_id: str
     customer_id: str
-    account_id: str
+    category_version: int
+    category: Category
+    kind: NotificationKind
+    template_id: str
+    message: str
     transaction_id: str
-    type: Literal["LOW_BALANCE", "HIGH_BALANCE"]
-    total_balance: Decimal
-    threshold: Decimal
     created_at: datetime
