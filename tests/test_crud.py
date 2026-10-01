@@ -16,7 +16,8 @@ from fastapi.testclient import TestClient
 
 from app.config import ROOT
 from app.main import create_app
-from app.repositories import AccountRepository
+from app.repositories import AccountRepository, CustomerRepository
+from test_api import _hold
 
 MISSING = str(ObjectId())  # well-formed, but never stored
 
@@ -62,9 +63,44 @@ def test_one_customer_many_accounts_and_name_edit(client):
     assert client.get(f"/api/customers/{first}/accounts").json() == accounts
     assert client.get(f"/api/customers/{second}/accounts").json() == []
     assert client.get("/api/accounts").json() == accounts
-    assert client.delete(f"/api/customers/{first}").status_code == 409
     client.put(f"/api/customers/{first}", json={"name": "Moataz Hikal", "email": "moataz@example.com"})
     assert all(a["userName"] == "Moataz Hikal" for a in client.get(f"/api/customers/{first}/accounts").json())
+
+
+def test_delete_customer_cascades_to_accounts_and_keeps_history(client, db):
+    owner = customer(client)["customerId"]
+    kept_owner = customer(client, "second@example.com")["customerId"]
+    funded, empty, kept = account(client, owner)["accountId"], account(client, owner)["accountId"], account(
+        client, kept_owner)["accountId"]
+    client.post(f"/api/accounts/{funded}/deposit", json={"amount": "150.00"})
+    client.post(f"/api/accounts/{funded}/withdraw", json={"amount": "60.00"})  # enters LOW: one stored alert
+    client.post(f"/api/accounts/{kept}/deposit", json={"amount": "5.00"})
+    assert client.get(f"/api/customers/{owner}/notifications").json() != []
+
+    deleted = client.delete(f"/api/customers/{owner}")  # a non-zero balance does not block the delete
+    assert deleted.status_code == 204 and deleted.content == b""
+    assert client.get(f"/api/customers/{owner}").status_code == 404
+    for id in (funded, empty):
+        assert client.get(f"/api/accounts/{id}").status_code == 404
+    assert [a["accountId"] for a in client.get("/api/accounts").json()] == [kept]
+    assert client.get(f"/api/accounts/{kept}").json()["balance"] == "5.00"
+    # Transactions and notifications stay for audit.
+    audit = client.get("/api/audit/transactions", params={"customerId": owner}).json()["items"]
+    assert [(t["accountId"], t["type"]) for t in audit] == [(funded, "DEPOSIT"), (funded, "WITHDRAW")]
+    assert db.notifications.count_documents({"customerId": ObjectId(owner)}) == 1
+    assert client.delete(f"/api/customers/{owner}").status_code == 404
+
+
+def test_failed_cascade_deletes_nothing(client, db, monkeypatch):
+    owner = customer(client)["customerId"]
+    id = account(client, owner)["accountId"]
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("customer delete failed")
+    monkeypatch.setattr(CustomerRepository, "delete", fail)
+    with pytest.raises(RuntimeError):
+        client.delete(f"/api/customers/{owner}")
+    assert client.get(f"/api/accounts/{id}").status_code == 200  # the account delete rolled back too
 
 
 def test_account_crud_and_deletion_rules(client):
@@ -157,6 +193,7 @@ def test_swagger_documents_crud_and_customer_ownership(client):
     assert set(paths["/api/accounts"]) == {"get", "post"}
     assert set(paths["/api/accounts/{id}"]) == {"get", "put", "delete"}
     assert "204" in paths["/api/customers/{id}"]["delete"]["responses"]
+    assert "409" not in paths["/api/customers/{id}"]["delete"]["responses"]  # accounts are deleted with the customer
     assert "409" in paths["/api/accounts/{id}"]["delete"]["responses"]
     assert "customerId" in schema["components"]["schemas"]["AccountCreate"]["properties"]
     assert client.get("/docs").status_code == 200
@@ -222,9 +259,22 @@ def test_delete_races_account_creation(client, db, monkeypatch):
         assert entered.wait(timeout=10)
         deleted = pool.submit(client.delete, f"/api/customers/{owner}")
         codes = (created.result().status_code, deleted.result().status_code)
-    assert codes == (201, 409)  # the delete conflicts, retries after the commit, then sees the account
-    assert db.customers.count_documents({"_id": ObjectId(owner)}) == 1
-    assert db.accounts.count_documents({"customerId": ObjectId(owner)}) == 1  # never an orphan account
+    assert codes == (201, 204)  # the delete conflicts, retries after the commit, then deletes the new account too
+    assert db.customers.count_documents({"_id": ObjectId(owner)}) == 0
+    assert db.accounts.count_documents({"customerId": ObjectId(owner)}) == 0  # never an orphan account
+
+
+def test_account_creation_after_customer_delete_is_404(client, db, monkeypatch):
+    owner = customer(client)["customerId"]
+    account(client, owner)
+    entered = _hold(monkeypatch, CustomerRepository, "delete")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        deleted = pool.submit(client.delete, f"/api/customers/{owner}")
+        assert entered.wait(timeout=10)
+        created = pool.submit(client.post, "/api/accounts", json={"customerId": owner, "accountType": "SAVINGS"})
+        codes = (deleted.result().status_code, created.result().status_code)
+    assert codes == (204, 404)  # creation conflicts, retries after the delete commits, then finds no customer
+    assert db.accounts.count_documents({"customerId": ObjectId(owner)}) == 0
 
 
 def test_rename_races_account_creation(client, monkeypatch):

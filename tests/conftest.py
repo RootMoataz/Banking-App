@@ -10,7 +10,7 @@ from app.config import ROOT, load_settings
 from app.db import ensure_indexes, get_database
 from app.main import create_app
 
-COLLECTIONS = ("customers", "accounts", "transactions", "alerts")
+COLLECTIONS = ("customers", "accounts", "transactions", "notifications")
 
 
 def _assert_test_db(name: str) -> None:
@@ -42,7 +42,11 @@ def db(settings):
 
 
 @pytest.fixture(autouse=True)
-def clean_collections(db):
+def clean_collections(request):
+    # Pure unit tests never ask for db/client, so they must not trigger a connection to Atlas.
+    if "db" not in request.fixturenames and "client" not in request.fixturenames:
+        return
+    db = request.getfixturevalue("db")
     _assert_test_db(db.name)
     for name in COLLECTIONS:
         db[name].delete_many({})

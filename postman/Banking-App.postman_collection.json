@@ -31,6 +31,18 @@
     {
       "key": "auditCursor",
       "value": ""
+    },
+    {
+      "key": "emailQuery",
+      "value": ""
+    },
+    {
+      "key": "transferKey",
+      "value": ""
+    },
+    {
+      "key": "transferId",
+      "value": ""
     }
   ],
   "item": [
@@ -145,6 +157,40 @@
               "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
               "pm.test(\"Customer name\", () => pm.expect(pm.response.json().name).to.eql(\"Moataz Hikal\"));",
               "pm.test(\"Email updated\", () => pm.expect(pm.response.json().email).to.eql(\"updated.\" + pm.collectionVariables.get(\"email\")));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Opt In To Marketing",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/customers/{{customerId}}/preferences",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"marketingEnabled\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Marketing enabled\", () => pm.expect(pm.response.json().marketingEnabled).to.eql(true));"
             ]
           }
         }
@@ -314,7 +360,8 @@
               "language": "json"
             }
           }
-        }
+        },
+        "description": "After a replayed Idempotency-Key whose account has since been deleted, the response is the stored Transaction (it has balanceAfter, not balance). Here the account still exists, so the replay returns the Account."
       },
       "event": [
         {
@@ -361,7 +408,8 @@
               "language": "json"
             }
           }
-        }
+        },
+        "description": "After a replayed Idempotency-Key whose account has since been deleted, the response is the stored Transaction (it has balanceAfter, not balance). Here the account still exists, so the replay returns the Account."
       },
       "event": [
         {
@@ -395,7 +443,8 @@
               "language": "json"
             }
           }
-        }
+        },
+        "description": "After a replayed Idempotency-Key whose account has since been deleted, the response is the stored Transaction (it has balanceAfter, not balance). Here the account still exists, so the replay returns the Account."
       },
       "event": [
         {
@@ -455,9 +504,18 @@
       "request": {
         "method": "GET",
         "header": [],
-        "url": "{{baseUrl}}/api/customers/search?email=updated.{{email}}&category=LOW"
+        "url": "{{baseUrl}}/api/customers/search?email={{emailQuery}}&category=LOW"
       },
       "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"emailQuery\", encodeURIComponent(\"updated.\" + pm.collectionVariables.get(\"email\")));"
+            ]
+          }
+        },
         {
           "listen": "test",
           "script": {
@@ -477,11 +535,11 @@
       ]
     },
     {
-      "name": "Get Alerts",
+      "name": "Get Notifications",
       "request": {
         "method": "GET",
         "header": [],
-        "url": "{{baseUrl}}/api/alerts?customerId={{customerId}}"
+        "url": "{{baseUrl}}/api/customers/{{customerId}}/notifications"
       },
       "event": [
         {
@@ -490,12 +548,11 @@
             "type": "text/javascript",
             "exec": [
               "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
-              "pm.test(\"One LOW_BALANCE alert\", () => {",
+              "pm.test(\"Low-balance alert and opted-in loan marketing\", () => {",
               "  const r = pm.response.json();",
-              "  pm.expect(r).to.have.lengthOf(1);",
-              "  pm.expect(r[0].type).to.eql(\"LOW_BALANCE\");",
-              "  pm.expect(r[0].totalBalance).to.eql(\"75.00\");",
-              "  pm.expect(r[0].threshold).to.eql(\"100.00\");",
+              "  pm.expect(r).to.have.lengthOf(2);",
+              "  pm.expect(r.map(n => n.kind).sort()).to.eql([\"LOW_BALANCE_ALERT\", \"LOW_BALANCE_MARKETING\"]);",
+              "  r.forEach(n => pm.expect([n.category, n.categoryVersion]).to.eql([\"LOW\", 2]));",
               "});"
             ]
           }
@@ -545,6 +602,159 @@
               "  const r = pm.response.json();",
               "  pm.expect(r.items.map(t => t.type)).to.eql([\"WITHDRAW\"]);",
               "  pm.expect(r.nextCursor).to.eql(null);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transfer Between Accounts",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{transferKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/transfers",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fromAccountId\": \"{{accountId}}\",\n  \"toAccountId\": \"{{secondAccountId}}\",\n  \"amount\": \"25.00\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Moves 25.00 from the first account to the second. Both belong to one customer, so the customer's total stays 75.00 and no notification is stored. Transfers work between any two accounts, including other customers' accounts."
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"transferKey\", \"transfer-\" + pm.variables.replaceIn(\"{{$guid}}\"));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Both balances\", () => {",
+              "  const r = pm.response.json();",
+              "  pm.expect([r.fromBalanceAfter, r.toBalanceAfter]).to.eql([\"50.00\", \"25.00\"]);",
+              "  pm.expect([r.fromAccountId, r.toAccountId]).to.eql([pm.collectionVariables.get(\"accountId\"), pm.collectionVariables.get(\"secondAccountId\")]);",
+              "});",
+              "pm.collectionVariables.set(\"transferId\", pm.response.json().transferId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Retry Transfer (same Idempotency-Key)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{transferKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/transfers",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fromAccountId\": \"{{accountId}}\",\n  \"toAccountId\": \"{{secondAccountId}}\",\n  \"amount\": \"25.00\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Replays the first transfer\", () => {",
+              "  const r = pm.response.json();",
+              "  pm.expect(r.transferId).to.eql(pm.collectionVariables.get(\"transferId\"));",
+              "  pm.expect([r.fromBalanceAfter, r.toBalanceAfter]).to.eql([\"50.00\", \"25.00\"]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transfer to the same account rejected",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/transfers",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fromAccountId\": \"{{accountId}}\",\n  \"toAccountId\": \"{{accountId}}\",\n  \"amount\": \"1.00\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 422\", () => pm.response.to.have.status(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Premium Accounts",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/accounts/premium?threshold=25.00&limit=200",
+        "description": "Accounts with a balance of at least threshold, highest first. Without threshold, PREMIUM_BALANCE_THRESHOLD (10000.00 by default) is used."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"At or above the threshold, highest first\", () => {",
+              "  const balances = pm.response.json().map(a => Number(a.balance));",
+              "  pm.expect(balances.every(b => b >= 25)).to.be.true;",
+              "  pm.expect(balances).to.eql([...balances].sort((x, y) => y - x));",
               "});"
             ]
           }
@@ -604,25 +814,6 @@
       ]
     },
     {
-      "name": "Customer with accounts deletion rejected",
-      "request": {
-        "method": "DELETE",
-        "header": [],
-        "url": "{{baseUrl}}/api/customers/{{customerId}}"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test(\"Status 409\", () => pm.response.to.have.status(409));"
-            ]
-          }
-        }
-      ]
-    },
-    {
       "name": "Drain Account",
       "request": {
         "method": "POST",
@@ -635,7 +826,7 @@
         "url": "{{baseUrl}}/api/accounts/{{accountId}}/withdraw",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"amount\": \"75.00\"\n}",
+          "raw": "{\n  \"amount\": \"50.00\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -677,31 +868,12 @@
       ]
     },
     {
-      "name": "Delete Second Account",
+      "name": "Delete Customer (cascades to accounts)",
       "request": {
         "method": "DELETE",
         "header": [],
-        "url": "{{baseUrl}}/api/accounts/{{secondAccountId}}"
-      },
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test(\"Status 204\", () => pm.response.to.have.status(204));",
-              "pm.test(\"Empty response\", () => pm.expect(pm.response.text()).to.eql(\"\"));"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Delete Customer",
-      "request": {
-        "method": "DELETE",
-        "header": [],
-        "url": "{{baseUrl}}/api/customers/{{customerId}}"
+        "url": "{{baseUrl}}/api/customers/{{customerId}}",
+        "description": "Deletes the customer and their remaining account (the second one still holds 25.00) in one step. Transactions and notifications are kept."
       },
       "event": [
         {
@@ -736,6 +908,25 @@
       ]
     },
     {
+      "name": "Second Account deleted with customer",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/accounts/{{secondAccountId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "Audit After Deletion",
       "request": {
         "method": "GET",
@@ -751,8 +942,8 @@
               "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
               "pm.test(\"History survives deletion\", () => {",
               "  const r = pm.response.json();",
-              "  pm.expect(r.items.map(t => t.type)).to.eql([\"DEPOSIT\", \"WITHDRAW\", \"WITHDRAW\"]);",
-              "  pm.expect(new Set(r.items.map(t => t.accountId))).to.eql(new Set([pm.collectionVariables.get(\"accountId\")]));",
+              "  pm.expect(r.items.map(t => t.type)).to.eql([\"DEPOSIT\", \"WITHDRAW\", \"TRANSFER_OUT\", \"TRANSFER_IN\", \"WITHDRAW\"]);",
+              "  pm.expect(r.items.map(t => t.accountId).filter((id, i, all) => all.indexOf(id) === i).sort()).to.eql([pm.collectionVariables.get(\"accountId\"), pm.collectionVariables.get(\"secondAccountId\")].sort());",
               "});"
             ]
           }

@@ -176,7 +176,9 @@ def test_by_customer_includes_every_account_even_deleted(client, db):
     assert [(t["accountId"], t["type"], t["amount"], t["balanceAfter"]) for t in page["items"]] == [
         (kept, "DEPOSIT", "10.00", "10.00"), (closed, "DEPOSIT", "5.00", "5.00"), (closed, "WITHDRAW", "5.00", "0.00")]
     assert {t["customerId"] for t in page["items"]} == {owner}
-    assert set(page["items"][0]) == {"txnId", "accountId", "customerId", "type", "amount", "balanceAfter", "date"}
+    assert set(page["items"][0]) == {"txnId", "accountId", "customerId", "type", "amount", "balanceAfter", "date",
+                                     "transferId", "fromAccountId", "toAccountId"}
+    assert [page["items"][0][k] for k in ("transferId", "fromAccountId", "toAccountId")] == [None] * 3
     assert [t["accountId"] for t in audit(client, accountId=closed)["items"]] == [closed, closed]
 
 
