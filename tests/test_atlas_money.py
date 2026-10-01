@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 
 import pytest
 from bson import ObjectId
@@ -84,15 +85,35 @@ def test_total_overflow_is_rejected(client, db):
     assert db.transactions.count_documents({}) == 0
 
 
-def test_preference_race_uses_serialized_preference(client, db):
+def test_preference_race_uses_serialized_preference(client, monkeypatch):
     cid = customer(client, True)
     aid = account(client, cid)
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    account_read = Event()
+    continue_deposit = Event()
+    repository = client.app.state.accounts.accounts
+    original_get = repository.get
+
+    def pause_first_read(*args, **kwargs):
+        row = original_get(*args, **kwargs)
+        if not account_read.is_set():
+            # Establish the deposit's old snapshot, then let opt-out commit.
+            account_read.set()
+            assert continue_deposit.wait(10), 'Timed out waiting for opt-out'
+        return row
+
+    monkeypatch.setattr(repository, 'get', pause_first_read)
+    with ThreadPoolExecutor(max_workers=1) as pool:
         deposit = pool.submit(client.post, f'/api/accounts/{aid}/deposit', json={'amount':10000})
-        opt_out = pool.submit(client.patch, f'/api/customers/{cid}/preferences', json={'marketingEnabled':False})
-        assert deposit.result().status_code == opt_out.result().status_code == 200
+        try:
+            assert account_read.wait(10), 'Deposit did not reach its snapshot read'
+            response = client.patch(f'/api/customers/{cid}/preferences', json={'marketingEnabled':False})
+            assert response.status_code == 200
+        finally:
+            continue_deposit.set()
+        assert deposit.result(timeout=20).status_code == 200
     messages = client.get(f'/api/customers/{cid}/notifications', params={'kind':'PREMIUM_MARKETING'}).json()
-    assert len(messages) in {0,1}
+    assert messages == []
+    assert len(client.get(f'/api/accounts/{aid}/transactions').json()) == 1
     assert client.get(f'/api/customers/{cid}').json()['marketingEnabled'] is False
     client.post(f'/api/accounts/{aid}/withdraw', json={'amount':10000})
     client.post(f'/api/accounts/{aid}/deposit', json={'amount':10000})

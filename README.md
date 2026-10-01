@@ -60,6 +60,7 @@ MONGODB_DATABASE=paper_maker
 Use a URL-encoded password if it contains characters reserved in URLs. `.env` and
 its local variants are ignored by Git. `.env.example` contains placeholders only.
 Never paste a working connection string into README, Postman, or a commit.
+Database names accept 1-38 letters, digits, underscores, or hyphens for Atlas compatibility.
 
 ```sh
 python -m uvicorn app.main:app --reload
@@ -268,7 +269,7 @@ MONGODB_TEST_DATABASE=paper_maker_test_local
 
 For Atlas tests, use a separate test URI/database with sufficient permissions.
 The database prefix must begin with `paper_maker_test_` and differ from the
-application database. Fixtures append a random suffix and delete only their own
+application database. Fixtures use up to 25 prefix characters, append a random suffix, and delete only their own
 generated databases. Never use customer data for tests.
 
 ```sh

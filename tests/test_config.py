@@ -21,7 +21,7 @@ def test_credentials_are_redacted_and_env_is_loaded(monkeypatch, tmp_path):
     assert 'sentinel_secret' not in repr(settings)
 
 
-@pytest.mark.parametrize('name', ['', 'bad/name', 'admin', 'local', 'config'])
+@pytest.mark.parametrize('name', ['', 'bad/name', 'admin', 'local', 'config', 'x' * 39])
 def test_reject_reserved_or_invalid_databases(name):
     from app.config import Settings
     with pytest.raises(ValueError):

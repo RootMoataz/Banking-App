@@ -21,8 +21,8 @@ class Settings(BaseModel):
     @field_validator('database')
     @classmethod
     def valid_database(cls, value):
-        if not re.fullmatch(r'[A-Za-z0-9_-]{1,63}', value) or value.lower() in {'admin', 'local', 'config'}:
-            raise ValueError('Choose a non-system database name using letters, digits, underscores or hyphens')
+        if not re.fullmatch(r'[A-Za-z0-9_-]{1,38}', value) or value.lower() in {'admin', 'local', 'config'}:
+            raise ValueError('Choose a non-system database name of 1-38 letters, digits, underscores or hyphens')
         return value
 
     @classmethod

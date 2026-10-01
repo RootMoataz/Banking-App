@@ -56,3 +56,9 @@ Both environments emitted the existing Starlette TestClient/httpx deprecation
 warning. Interactive Swagger clicks and Postman's JavaScript Runner were not
 performed; the HTTP workflow and OpenAPI schema were checked automatically.
 If test settings are missing, pytest skips integration tests explicitly.
+
+Final check on October 1, 2026: 98 tests passed locally. The preference race now
+forces an opt-out to commit while a deposit has an older snapshot, and verifies
+that retrying the deposit produces no premium marketing message. That focused
+test also passed against Atlas. Database-name validation now enforces the
+cluster's 38-character limit, including generated test database names.

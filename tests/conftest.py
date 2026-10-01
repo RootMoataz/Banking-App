@@ -20,7 +20,8 @@ def settings():
         pytest.skip('Set MONGODB_TEST_URI and MONGODB_TEST_DATABASE for real MongoDB integration tests')
     if not prefix.startswith('paper_maker_test_') or prefix == os.getenv('MONGODB_DATABASE'):
         pytest.fail('Tests require a separate paper_maker_test_ database prefix')
-    name = prefix + '_' + uuid4().hex[:12]
+    # Leave room for a unique suffix within Atlas shared-tier name limits.
+    name = prefix[:25] + '_' + uuid4().hex[:12]
     config = Settings(uri=uri, database=name)
     yield config
     # The generated name belongs only to this fixture; never drop a supplied database.
