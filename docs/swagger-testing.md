@@ -44,7 +44,15 @@ server: CRUD, exact cents, persistence across app instances, overdrafts, concurr
 withdrawals, customer totals, preference/lifecycle races, rollback, retry duplicates,
 search, UTC boundaries, pagination, history retention, and the collection workflow.
 
-The implementation was tested against an isolated local MongoDB replica set.
-A live Atlas connection and manual Swagger/Postman clicks require separate
-verification; neither is implied by a green local test run. If test settings are
-missing, pytest skips integration tests with an explicit explanation.
+Verified on September 30, 2026 with Python 3.12.14:
+
+- Full suite against an isolated MongoDB 8.0.28 replica set: 97 passed.
+- Independent review reran that suite: 97 passed, no blocking findings.
+- Live Atlas CRUD, money, audit, and collection workflow checks: 17 passed.
+- Atlas connection and required index setup succeeded. Tests used separate,
+  generated test databases, not the application database.
+
+Both environments emitted the existing Starlette TestClient/httpx deprecation
+warning. Interactive Swagger clicks and Postman's JavaScript Runner were not
+performed; the HTTP workflow and OpenAPI schema were checked automatically.
+If test settings are missing, pytest skips integration tests explicitly.

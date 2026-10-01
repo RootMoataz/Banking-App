@@ -140,6 +140,6 @@
 
 These tasks are ordered because storage interfaces and transaction semantics are shared.
 Prefer implementation in this session, followed by a separate whole-branch review.
-No live connection can be verified until the rotated credential is configured
-locally. Offline unit work can proceed without it. No step authorizes posting
+Live Atlas connectivity and 17 targeted integration checks have been verified
+using the user-authorized local configuration. The full local suite has 97 passing tests. No step authorizes posting
 credentials in chat, enabling public Atlas access, or sending marketing externally.

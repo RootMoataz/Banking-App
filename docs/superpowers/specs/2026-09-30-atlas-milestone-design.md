@@ -1,6 +1,6 @@
 # MongoDB Atlas milestone
 
-Status: proposed design for review; implementation has not started.
+Status: approved and implemented. Verification results are in docs/swagger-testing.md.
 
 Branch: `2_backend-rest-api-mongodb-atlas`
 
@@ -177,11 +177,10 @@ approval decisions. These are workshop templates, not a loan approval service.
 Read MONGODB_URI and MONGODB_DATABASE from environment variables or local .env.
 Keep .env and local variants ignored, with an explicit exception for a tracked
 .env.example containing placeholders only. Never log the connection string.
-The credential posted in chat must be rotated; do not copy it into source,
-documentation, Postman, fixtures, or this design.
+Keep the connection credential only in local configuration; do not copy it into
+source, documentation, Postman, fixtures, or this design.
 
-The user will provide the replacement through their local .env. Live verification
-requires network access, a reachable Atlas cluster, and a database user with
+Live verification requires network access, a reachable Atlas cluster, and a database user with
 permissions for the selected workshop database. Do not weaken Atlas network rules
 or permissions automatically. Tests must use a separate, explicitly configured
 test database and must never clear the application database.
