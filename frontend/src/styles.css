@@ -154,7 +154,8 @@ th:last-child, td:last-child { padding-right: 20px; }
 th.identifier { font-weight: 400; }
 .money { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 td .actions { flex-wrap: nowrap; gap: 6px; justify-content: flex-end; }
-td .actions button { min-height: 38px; padding: 5px 12px; font-size: 14px; }
+td .actions button { min-height: 38px; padding: 5px 12px; font-size: 14px; white-space: nowrap; }
+table.stack td:last-child { white-space: nowrap; width: 1%; }
 thead th:last-child { text-align: right; }
 .person { display: flex; align-items: center; gap: 12px; }
 
