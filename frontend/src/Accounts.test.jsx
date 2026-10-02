@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import Accounts from './Accounts';
 
-const customer = { customerId: 'c1', name: 'Ada' };
-const account = { accountId: 'a1', customerId: 'c1', userName: 'Ada', accountType: 'SAVINGS', balance: '0.00' };
+const customer = { customerId: 'c1', name: 'Moataz Hikal' };
+const account = { accountId: 'a1', customerId: 'c1', userName: 'Moataz Hikal', accountType: 'SAVINGS', balance: '0.00' };
 const other = { ...account, accountId: 'a2', customerId: 'c2', userName: 'Grace' };
 let requests;
 let failure;
@@ -23,6 +23,7 @@ beforeEach(() => {
 async function openAction(name) {
   const user = userEvent.setup();
   render(<Accounts customer={customer} onBack={() => {}} />);
+  if (name.startsWith('Delete account')) { await screen.findByText('SAVINGS'); await user.click(screen.getByText('More')); }
   await user.click(await screen.findByRole('button', { name }));
   return user;
 }
@@ -86,7 +87,7 @@ it('opens an account for the selected customer', async () => {
 });
 
 it('loads account transaction history', async () => {
-  await openAction('History');
+  await openAction('View activity');
   expect(await screen.findByText('DEPOSIT')).toBeInTheDocument();
   expect(screen.getAllByText('12.34')).toHaveLength(2);
 });
@@ -116,5 +117,18 @@ it('removes an account after a successful empty 204 response', async () => {
 it('disables deletion when the displayed balance is nonzero', async () => {
   fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ ...account, balance: '0.01' }] });
   render(<Accounts customer={customer} onBack={() => {}} />);
-  expect(await screen.findByRole('button', { name: 'Delete account a1' })).toBeDisabled();
+  await screen.findByText('SAVINGS');
+  await userEvent.setup().click(screen.getByText('More'));
+  expect(screen.getByRole('button', { name: 'Delete account a1' })).toBeDisabled();
+});
+
+it('expands activity within its account and collapses it without reloading accounts', async () => {
+  const user = await openAction('View activity');
+  const activity = screen.getByRole('button', { name: 'View activity' });
+  expect(activity).toHaveAttribute('aria-expanded', 'true');
+  expect(await screen.findByText('DEPOSIT')).toBeInTheDocument();
+  await user.click(activity);
+  expect(activity).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByText('DEPOSIT')).not.toBeInTheDocument();
+  expect(requests.filter(item => item.url.endsWith('/customers/c1/accounts'))).toHaveLength(1);
 });

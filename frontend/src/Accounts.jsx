@@ -101,7 +101,7 @@ function Operation({ operation, customer, onCancel, onSuccess, onBusy }) {
 
 function History({ account, onClose }) {
   const state = useList(`/accounts/${encodeURIComponent(account.accountId)}/transactions`);
-  return <section className="panel"><div className="heading"><h2>Transactions · {account.accountId}</h2><button className="secondary" onClick={onClose}>Close history</button></div>
+  return <section className="account-history" id={`history-${account.accountId}`} aria-label={`${account.accountType} activity`}><div className="heading"><h2>{account.accountType} activity</h2><button className="secondary" onClick={onClose}>Close history</button></div>
     <ListStatus state={state} />
     {!state.loading && !state.error && (state.items.length === 0 ? <p>No transactions yet.</p> : <div className="table-scroll"><table><caption>Transaction history, oldest first</caption><thead><tr><th>Date</th><th>Type</th><th className="money">Amount</th><th className="money">Balance after</th></tr></thead><tbody>{state.items.map(item => <tr key={item.txnId}><td>{new Date(item.date).toLocaleString()}</td><td>{item.type}</td><td className="money">{money(item.amount)}</td><td className="money">{money(item.balanceAfter)}</td></tr>)}</tbody></table></div>)}
   </section>;
@@ -119,9 +119,9 @@ export default function Accounts({ customer, onBack, onNavigationLock }) {
   function begin(kind, account) { setMessage(''); setHistory(null); setOperation({ kind, account }); }
   return <>
     <button className="back-link" disabled={disabled} onClick={onBack}>Back to customers</button>
-    <div className="heading"><h1>{customer ? `${customer.name}'s accounts` : 'Premium accounts'}</h1><div className="actions">
+    <div className="heading"><div><h1>{customer ? 'Customer accounts' : 'Premium accounts'}</h1>{customer && <><p className="customer-name">{customer.name}</p><p>{customer.email}</p></>}</div><div className="actions">
       {customer && <button disabled={disabled || state.loading || Boolean(state.error)} onClick={() => begin('open')}>Open account</button>}
-      <button disabled={disabled} onClick={() => begin('transfer')}>Transfer</button>
+      <button className="secondary" disabled={disabled} onClick={() => begin('transfer')}>Transfer</button>
       <button className="secondary" disabled={disabled || state.loading} onClick={state.retry}>Refresh accounts</button>
     </div></div>
     {!customer && <p className="loading-note">Up to 200 accounts meeting the server's premium balance threshold, highest balance first.</p>}
@@ -129,13 +129,18 @@ export default function Accounts({ customer, onBack, onNavigationLock }) {
     <p role="status">{message}</p>
     {operation && <Operation operation={operation} customer={customer} onBusy={setBusy} onCancel={() => setOperation(null)} onSuccess={text => { setOperation(null); setMessage(text); setRevision(value => value + 1); }} />}
     <ListStatus state={state} />
-    {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No accounts found." hint={customer ? "Open an account to begin this customer's ledger." : 'No account currently meets the premium balance threshold.'} /> : <div className="table-scroll"><table className="stack"><caption>{customer ? 'Customer accounts' : 'Premium accounts'}</caption><thead><tr><th>Account ID</th><th>Owner</th><th>Type</th><th>Opened</th><th className="money">Balance</th><th>Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
-      <th scope="row" className="identifier">{account.accountId}</th><td data-label="Owner">{account.userName}</td><td data-label="Type">{account.accountType}</td><td data-label="Opened">{shortDate(account.createdAt)}</td><td className="money" data-label="Balance">{money(account.balance)}</td><td><div className="actions account-actions">
-        <button disabled={disabled} onClick={() => begin('deposit', account)}>Deposit</button><button disabled={disabled} onClick={() => begin('withdraw', account)}>Withdraw</button>
-        <button className="secondary" disabled={disabled} onClick={() => setHistory(account)}>History</button>
-        <button className="secondary danger-text" disabled={disabled || !/^0(?:\.0+)?$/.test(String(account.balance))} title="Only zero-balance accounts can be deleted" aria-label={`Delete account ${account.accountId}`} onClick={() => begin('delete', account)}>Delete</button>
-      </div></td>
-    </tr>)}</tbody></table></div>)}
-    {history && <History key={history.accountId} account={history} onClose={() => setHistory(null)} />}
+    {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No accounts found." hint={customer ? "Open an account to begin this customer's ledger." : 'No account currently meets the premium balance threshold.'} /> : <div className="account-list">{state.items.map(account => <article className="account" key={account.accountId} aria-label={`${account.accountType} account ${account.accountId}`}>
+      <div className="account-overview">
+        <div className="account-identity"><h2>{account.accountType}</h2><p className="identifier">ID ending ...{account.accountId.slice(-4)}</p>{!customer && <p>{account.userName}</p>}</div>
+        <div className="account-balance"><span>Current balance</span><strong>{money(account.balance)}</strong></div>
+        <div className="actions account-actions">
+          <button disabled={disabled} onClick={() => begin('deposit', account)}>Deposit</button>
+          <button className="secondary" disabled={disabled} onClick={() => begin('withdraw', account)}>Withdraw</button>
+          <button className="secondary" disabled={disabled} aria-expanded={history?.accountId === account.accountId} aria-controls={`history-${account.accountId}`} onClick={() => setHistory(history?.accountId === account.accountId ? null : account)}>View activity</button>
+          <details className="account-more"><summary>More</summary><div className="account-menu"><p className="identifier">Account ID: {account.accountId}</p><p>Opened {shortDate(account.createdAt) || '-'}</p><button className="secondary danger-text" disabled={disabled || !/^0(?:\.0+)?$/.test(String(account.balance))} title="Only zero-balance accounts can be deleted" aria-label={`Delete account ${account.accountId}`} onClick={() => begin('delete', account)}>Delete account</button></div></details>
+        </div>
+      </div>
+      {history?.accountId === account.accountId && <History account={account} onClose={() => setHistory(null)} />}
+    </article>)}</div>)}
   </>;
 }

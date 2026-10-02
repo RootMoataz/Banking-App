@@ -5,3 +5,7 @@ __pycache__/
 .env
 /postman/.postman/
 /postman/postman/
+node_modules/
+dist/
+.env.local
+coverage/

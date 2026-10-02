@@ -86,11 +86,11 @@ export default function App() {
 
   return <>
     <a className="skip-link" href="#main">Skip to content</a>
-    <header><div className="container brand-row"><img className="brand-logo" src={logo} alt="" /><div><p className="brand">Paper Maker Banking</p><p className="brand-sub">Private ledger for customers and accounts</p></div></div>
+    <header><div className="container header-inner"><div className="brand-row"><img className="brand-logo" src={logo} alt="" /><div><p className="brand">Paper Maker</p><p className="brand-sub">Banking App</p></div></div>
       <nav aria-label="Main navigation"><div className="container nav-items">
-        <button disabled={navigationLocked} aria-current={!accountView ? 'page' : undefined} onClick={() => setAccountView(null)}>Customers</button>
+        <button disabled={navigationLocked} aria-current={!accountView || accountView.customer ? 'page' : undefined} onClick={() => setAccountView(null)}>Customers</button>
         <button disabled={navigationLocked} aria-current={accountView && !accountView.customer ? 'page' : undefined} onClick={() => setAccountView({ customer: null })}>Premium accounts</button>
-      </div></nav>
+      </div></nav></div>
     </header>
     <main id="main" className="container">
       {accountView ? <Accounts key={accountView.customer?.customerId || "premium"} onNavigationLock={setAccountNavigationLocked} customer={accountView.customer} onBack={() => setAccountView(null)} /> : <>

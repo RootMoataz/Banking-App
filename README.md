@@ -42,7 +42,7 @@ repositories handle HTTP requests, business rules, and storage respectively.
 A Vite + React app in `frontend/` for the API below: customer list, add, edit and
 confirmed delete; per-customer accounts with open, deposit, withdraw, transfer,
 transaction history and account delete; and the premium-accounts list. It is
-styled as a paper-and-banknote-green private ledger with serif headings.
+styled with a forest-green navigation bar, clear account summaries, and expandable transaction history.
 
 ```bash
 cd frontend
@@ -66,7 +66,7 @@ MongoDB Atlas cluster with a database user that can read and write the chosen
 database and create its indexes. Allow your machine's IP in Atlas Network Access.
 
 ```sh
-git clone --branch 2_api-atlas-claude https://github.com/RootMoataz/Paper-Maker-Banking-App.git
+git clone --branch 4_frontend-redesign https://github.com/RootMoataz/Paper-Maker-Banking-App.git
 cd Paper-Maker-Banking-App
 python -m venv .venv
 ```
@@ -534,4 +534,5 @@ database with many other accounts.
 | --- | --- |
 | `1_backend-rest-api-without-db` | In-memory backend milestone |
 | `2_api-atlas-claude` | MongoDB Atlas storage |
-| `3_react-frontend` | This branch: React frontend on the Atlas backend |
+| `3_react-frontend` | Original React frontend on the Atlas backend |
+| `4_frontend-redesign` | This branch: responsive banking dashboard and inline account activity |

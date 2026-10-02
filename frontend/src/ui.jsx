@@ -15,15 +15,6 @@ export function Skeleton({ rows = 4 }) {
   return <div className="skeleton" aria-hidden="true">{Array.from({ length: rows }, (_, index) => <i key={index} />)}</div>;
 }
 
-// Fine concentric rosette, drawn once for empty states.
-export function Rosette() {
-  const rings = [0, 30, 60, 90, 120, 150];
-  return <svg viewBox="-50 -50 100 100" fill="none" stroke="currentColor" strokeWidth=".6" aria-hidden="true">
-    {rings.map(angle => <ellipse key={angle} rx="44" ry="17" transform={`rotate(${angle})`} />)}
-    <circle r="46" strokeWidth="1" /><circle r="12" />
-  </svg>;
-}
-
 export function Empty({ title, hint }) {
-  return <div className="empty"><Rosette /><p className="lead">{title}</p>{hint && <p className="hint">{hint}</p>}</div>;
+  return <div className="empty"><p className="lead">{title}</p>{hint && <p className="hint">{hint}</p>}</div>;
 }

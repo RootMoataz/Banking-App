@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import App from './App';
 
-const ada = { customerId: '0123456789abcdef01234567', name: 'Ada Lovelace', email: 'ada@example.com' };
+const ada = { customerId: '0123456789abcdef01234567', name: 'Moataz Hikal', email: 'moataz@example.com' };
 const response = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
 let fetchMock;
 beforeEach(() => { fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock); });
@@ -30,15 +30,15 @@ it('adds a customer and displays the returned record', async () => {
 });
 
 it('edits a customer with PUT and both fields', async () => {
-  fetchMock.mockResolvedValueOnce(response([ada])).mockResolvedValueOnce(response({ ...ada, name: 'Ada Byron' }));
+  fetchMock.mockResolvedValueOnce(response([ada])).mockResolvedValueOnce(response({ ...ada, name: 'Moataz H. Hikal' }));
   const user = userEvent.setup();
   render(<App />);
   await user.click(await screen.findByRole('button', { name: `Edit ${ada.name}` }));
   await user.clear(screen.getByLabelText('Name'));
-  await user.type(screen.getByLabelText('Name'), 'Ada Byron');
+  await user.type(screen.getByLabelText('Name'), 'Moataz H. Hikal');
   await user.click(screen.getByRole('button', { name: 'Save customer' }));
-  expect(await screen.findByText('Ada Byron')).toBeInTheDocument();
-  expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining(ada.customerId), expect.objectContaining({ method: 'PUT', body: JSON.stringify({ name: 'Ada Byron', email: ada.email }) }));
+  expect(await screen.findByText('Moataz H. Hikal')).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining(ada.customerId), expect.objectContaining({ method: 'PUT', body: JSON.stringify({ name: 'Moataz H. Hikal', email: ada.email }) }));
 });
 
 it('disables customer actions while the edit form is open', async () => {
