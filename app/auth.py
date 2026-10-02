@@ -3,9 +3,11 @@
 import hashlib
 import hmac
 import logging
+import math
 import os
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 import jwt
 from bson import ObjectId
@@ -15,7 +17,7 @@ from pymongo.errors import DuplicateKeyError
 
 from .config import MIN_JWT_SECRET_LENGTH, Settings
 from .models import AuthUser, LoginRequest, RegisterRequest, TokenResponse
-from .repositories import CustomerRepository, UserRepository
+from .repositories import CustomerRepository, LoginAttemptRepository, UserRepository
 from .services import BankError, _in_transaction
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,7 @@ MIN_ADMIN_PASSWORD_LENGTH = 12
 ALGORITHM = "HS256"
 BAD_TOKEN = "Missing, invalid or expired token"
 BAD_LOGIN = "Invalid email or password"
+TOO_MANY_LOGINS = "Too many failed login attempts, try again later"
 
 
 def _scrypt(password: str, salt: bytes, n: int, r: int, p: int, dklen: int = 64) -> bytes:
@@ -86,6 +89,7 @@ class AuthService:
     def __init__(self, db: Database, settings: Settings):
         self.settings = settings
         self.users = UserRepository(db)
+        self.attempts = LoginAttemptRepository(db)
         self.customers = CustomerRepository(db)
         self.db = db
 
@@ -114,10 +118,19 @@ class AuthService:
         return self._token_for(user)
 
     def login(self, data: LoginRequest) -> TokenResponse:
+        # Every attempt is counted before its password is checked, so a burst of parallel requests cannot all get a
+        # check. Unknown emails are counted like known ones, so a lock never reveals whether an email exists.
+        email_key = data.email.lower()
+        attempt = self.attempts.count_attempt(email_key, self.settings.login_max_failures,
+                                              self.settings.login_lock_minutes)
+        if attempt["failures"] > self.settings.login_max_failures:
+            remaining = (attempt["lockedUntil"] - datetime.now(timezone.utc)).total_seconds()
+            raise BankError(429, TOO_MANY_LOGINS, {"Retry-After": str(max(1, math.ceil(remaining)))})
         user = self.users.by_email(data.email)
         ok = verify_password(data.password, user["passwordHash"] if user else _DUMMY_HASH)
         if user is None or not ok or user.get("disabled"):
             raise BankError(401, BAD_LOGIN)
+        self.attempts.reset(email_key)
         return self._token_for(user)
 
     def authenticate(self, token: str | None) -> Principal:

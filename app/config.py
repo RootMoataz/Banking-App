@@ -26,6 +26,8 @@ class Settings:
     jwt_expiration_minutes: int = 60
     admin_email: str | None = None
     admin_password: str | None = field(default=None, repr=False)
+    login_max_failures: int = 5
+    login_lock_minutes: int = 15
 
     def __post_init__(self):
         if not self.mongodb_db:
@@ -45,6 +47,13 @@ def _threshold(name: str, setting, default: str) -> int:
 def _expiration(raw: str) -> int:
     if not raw.isascii() or not raw.isdecimal() or int(raw) < 1:
         raise ValueError(f"JWT_EXPIRATION_MINUTES must be a whole number of minutes, 1 or more, got {raw!r}")
+    return int(raw)
+
+
+def _positive_int(name: str, raw: str, maximum: int | None = None) -> int:
+    if not raw.isascii() or not raw.isdecimal() or int(raw) < 1 or (maximum is not None and int(raw) > maximum):
+        limit = "" if maximum is None else f" and at most {maximum}"
+        raise ValueError(f"{name} must be a whole number, 1 or more{limit}, got {raw!r}")
     return int(raw)
 
 
@@ -84,4 +93,7 @@ def load_settings(env_file: Path = ROOT / ".env") -> Settings:
         _expiration(setting("JWT_EXPIRATION_MINUTES", "60")),
         setting("ADMIN_EMAIL") or None,
         setting("ADMIN_PASSWORD") or None,
+        _positive_int("LOGIN_MAX_FAILURES", setting("LOGIN_MAX_FAILURES", "5")),
+        # At most one day, the life of a login_attempts document, so the TTL index can never lift a lock early.
+        _positive_int("LOGIN_LOCK_MINUTES", setting("LOGIN_LOCK_MINUTES", "15"), 24 * 60),
     )

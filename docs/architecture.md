@@ -37,7 +37,9 @@ the S3 bucket (`aws s3 sync frontend/dist s3://<bucket>`). See `deploy/README.md
 ## Request flow
 
 1. The browser sends `POST /api/auth/login` with an email and password. The server checks the scrypt hash and answers
-   with an HS256 JWT (`sub` is the user id, `exp` is 60 minutes by default).
+   with an HS256 JWT (`sub` is the user id, `exp` is 60 minutes by default). After 5 failed logins for an email
+   (known or not) it answers 429 with `Retry-After` for 15 minutes; the counters live in the `login_attempts`
+   collection (`LOGIN_MAX_FAILURES`, `LOGIN_LOCK_MINUTES`).
 2. Every later call carries `Authorization: Bearer <token>`.
 3. On each request the `authenticate` dependency decodes the token and reloads the user from the `users` collection.
    The role stored in the database is used, not anything in the token, so a disabled user or a changed role takes

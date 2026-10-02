@@ -49,6 +49,11 @@ def test_simple_request_headers():
     assert "access-control-allow-origin" not in other.headers
 
 
+def test_retry_after_is_readable_by_the_browser():
+    response = TestClient(create_app(SETTINGS)).get("/api/accounts/abc", headers={"Origin": ALLOWED})
+    assert response.headers["access-control-expose-headers"] == "Retry-After"
+
+
 def test_configured_origins_replace_the_defaults():
     client = TestClient(create_app(replace(SETTINGS, cors_allowed_origins=("https://bank.example",))))
     assert preflight(client, "https://bank.example").headers["access-control-allow-origin"] == "https://bank.example"

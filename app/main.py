@@ -88,7 +88,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 return await inner(scope, receive, send)
             if built is None:
                 built = CORSMiddleware(inner, allow_origins=current().cors_allowed_origins, allow_methods=["*"],
-                                       allow_headers=["Content-Type", "Idempotency-Key", "Authorization"])
+                                       allow_headers=["Content-Type", "Idempotency-Key", "Authorization"],
+                                       expose_headers=["Retry-After"])
             await built(scope, receive, send)
         return middleware
 
@@ -130,7 +131,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(BankError)
     async def bank_error_handler(request, exc: BankError):
-        return JSONResponse(status_code=exc.status, content={"detail": exc.detail})
+        content = {"detail": exc.detail}
+        if exc.headers and "Retry-After" in exc.headers:  # also in the body, for clients that cannot read headers
+            content["retryAfter"] = int(exc.headers["Retry-After"])
+        return JSONResponse(status_code=exc.status, content=content, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request, exc: RequestValidationError):
@@ -158,7 +162,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return app.state.auth.register(data)
 
     @app.post("/api/auth/login", response_model=TokenResponse, tags=["Auth"],
-              responses={401: {"description": "Wrong email or password (the same answer for both)"}})
+              responses={401: {"description": "Wrong email or password (the same answer for both)"},
+                         429: {"description": "Too many failed logins for this email; see the Retry-After header"}})
     def login(data: LoginRequest):
         return app.state.auth.login(data)
 

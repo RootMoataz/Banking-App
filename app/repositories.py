@@ -6,6 +6,7 @@ from bson import Int64, ObjectId
 from pymongo import ReturnDocument
 from pymongo.client_session import ClientSession
 from pymongo.database import Database
+from pymongo.errors import DuplicateKeyError
 
 
 def _now() -> datetime:
@@ -36,6 +37,38 @@ class UserRepository:
 
     def delete_for_customer(self, customer_oid: ObjectId, session: ClientSession) -> None:
         self.collection.delete_many({"customerId": customer_oid}, session=session)
+
+
+class LoginAttemptRepository:
+    """Failed-login counters kept in MongoDB, because the API runs on several Lambda containers."""
+
+    def __init__(self, db: Database):
+        self.collection = db.login_attempts
+
+    def count_attempt(self, email_key: str, max_failures: int, lock_minutes: int) -> dict:
+        """Count one login attempt before its password is checked and return the counter as it is now.
+
+        One atomic update, so concurrent attempts each get their own number: the one that reaches the limit sets
+        lockedUntil, and any attempt past it is over the limit. A lock that has run out starts a new count."""
+        now = _now()
+        expired = {"$and": [{"$eq": [{"$type": "$lockedUntil"}, "date"]}, {"$lte": ["$lockedUntil", now]}]}
+        pipeline = [
+            {"$set": {"failures": {"$add": [{"$cond": [expired, 0, {"$ifNull": ["$failures", 0]}]}, 1]},
+                      "lockedUntil": {"$cond": [expired, None, {"$ifNull": ["$lockedUntil", None]}]},
+                      "updatedAt": now}},
+            {"$set": {"lockedUntil": {"$cond": [
+                {"$and": [{"$gte": ["$failures", max_failures]}, {"$eq": ["$lockedUntil", None]}]},
+                now + timedelta(minutes=lock_minutes), "$lockedUntil"]}}},
+        ]
+        try:
+            return self.collection.find_one_and_update({"emailKey": email_key}, pipeline, upsert=True,
+                                                       return_document=ReturnDocument.AFTER)
+        except DuplicateKeyError:  # two first attempts upserted at once; the other one's document exists now
+            return self.collection.find_one_and_update({"emailKey": email_key}, pipeline, upsert=True,
+                                                       return_document=ReturnDocument.AFTER)
+
+    def reset(self, email_key: str) -> None:
+        self.collection.delete_one({"emailKey": email_key})
 
 
 class CustomerRepository:

@@ -25,10 +25,11 @@ logger = logging.getLogger(__name__)
 
 
 class BankError(Exception):
-    def __init__(self, status: int, detail: str):
+    def __init__(self, status: int, detail: str, headers: dict[str, str] | None = None):
         super().__init__(detail)
         self.status = status
         self.detail = detail
+        self.headers = headers
 
 
 def category(total_cents: int, settings: Settings) -> Category:

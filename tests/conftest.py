@@ -17,7 +17,7 @@ from app.db import ensure_indexes, get_database
 from app.main import create_app
 from app.repositories import UserRepository
 
-COLLECTIONS = ("customers", "accounts", "transactions", "notifications", "users")
+COLLECTIONS = ("customers", "accounts", "transactions", "notifications", "users", "login_attempts")
 ADMIN_EMAIL = "admin@paper-maker.test"
 ADMIN_PASSWORD = "admin-test-password"
 _ADMIN_HASH = hash_password(ADMIN_PASSWORD)  # hashed once: scrypt is slow on purpose

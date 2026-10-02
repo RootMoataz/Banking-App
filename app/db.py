@@ -9,6 +9,9 @@ def get_database(settings) -> Database:
 def ensure_indexes(db: Database) -> None:
     db.customers.create_index("emailKey", unique=True, name="emailKey_unique")
     db.users.create_index("emailKey", unique=True, name="emailKey_unique")
+    # Failed-login counters: one per email, so concurrent first failures cannot create two; stale ones expire.
+    db.login_attempts.create_index("emailKey", unique=True, name="emailKey_unique")
+    db.login_attempts.create_index("updatedAt", expireAfterSeconds=24 * 60 * 60, name="updatedAt_ttl")
     db.accounts.create_index("customerId")
     # Premium accounts: the balance bound and the highest-first order both come from this index.
     db.accounts.create_index([("balanceCents", -1), ("_id", 1)], name="balance_desc")
