@@ -44,7 +44,7 @@ customers in list results.
 | 29 | DELETE /api/customers/`<customerId>` | Customer ID | 204, empty body; `<account2Id>` still holds 25.00 and is deleted with the customer |
 | 30 | GET /api/customers/`<customerId>` | Deleted ID | 404 |
 | 31 | GET /api/accounts/`<account2Id>` | Account ID | 404, deleted with its customer |
-| 32 | GET /api/audit/transactions | `customerId` = `<customerId>` | 200, all five transactions (deposit, withdrawal, TRANSFER_OUT, TRANSFER_IN, final withdrawal): the history was kept |
+| 32 | GET /api/audit/transactions | `customerId` = `<customerId>` | 200, all six transactions (deposit, withdrawal, TRANSFER_OUT, TRANSFER_IN, final withdrawal, and an ACCOUNT_CLOSED record of the 25.00 removed from `<account2Id>`): the history was kept |
 
 Note on replays: a deposit or withdraw replayed with the same `Idempotency-Key` returns the
 Account while the account exists. If the account was deleted in between, the response is the
@@ -59,7 +59,8 @@ belong to one customer in this walkthrough, the customer's total does not
 change and the transfer stores no notification. A key on a transfer belongs
 to the source account, like a withdrawal's, and reusing it with a different
 body or destination returns 409. Step 29 shows the cascade: deleting a customer
-deletes all their accounts whatever their balances, while transactions and
+deletes all their accounts whatever their balances (an `ACCOUNT_CLOSED` record
+shows the 25.00 removed from the second account), while transactions and
 notifications stay.
 
 Step 17 matches the customer because the `email` filter is a case-insensitive
