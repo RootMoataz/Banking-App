@@ -88,7 +88,8 @@ class Transaction(Model):
     account_id: str
     customer_id: str
     # A transfer stores one record per account: TRANSFER_OUT on the source and TRANSFER_IN on the destination.
-    type: Literal["DEPOSIT", "WITHDRAW", "TRANSFER_OUT", "TRANSFER_IN"]
+    # ACCOUNT_CLOSED records the balance removed when a customer delete removes the account.
+    type: Literal["DEPOSIT", "WITHDRAW", "TRANSFER_OUT", "TRANSFER_IN", "ACCOUNT_CLOSED"]
     amount: Decimal
     balance_after: Decimal  # of this record's account
     date: datetime
