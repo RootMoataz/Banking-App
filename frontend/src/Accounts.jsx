@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest } from './api';
-import { Empty, Skeleton, Summary, money, shortDate } from './ui';
+import { Empty, Skeleton, Summary, endingIn, money, shortDate } from './ui';
 
-const amountPattern = '(?:0|[1-9][0-9]{0,7})(?:[.][0-9]{1,2})?';
+export const amountPattern = '(?:0|[1-9][0-9]{0,7})(?:[.][0-9]{1,2})?';
+const flowOf = type => /^deposit/i.test(type) ? { sign: '+', className: 'credit' } : /^withdraw/i.test(type) ? { sign: '-', className: 'debit' } : { sign: '', className: '' };
 const labels = { deposit: 'deposit', withdraw: 'withdrawal', transfer: 'transfer' };
 
-function useList(path, revision = 0) {
+export function useList(path, revision = 0) {
   const [state, setState] = useState({ items: [], loading: true, error: '' });
   const [retry, setRetry] = useState(0);
   useEffect(() => {
@@ -19,7 +20,7 @@ function useList(path, revision = 0) {
   return { ...state, retry: () => setRetry(value => value + 1) };
 }
 
-function ListStatus({ state }) {
+export function ListStatus({ state }) {
   return state.loading ? <><p className="loading-note">Loading...</p><Skeleton rows={3} /></> : state.error ? <div><p role="alert" className="error">{state.error}</p><button type="button" onClick={state.retry}>Retry</button></div> : null;
 }
 
@@ -99,11 +100,11 @@ function Operation({ operation, customer, onCancel, onSuccess, onBusy }) {
   </section>;
 }
 
-function History({ account, onClose }) {
+export function History({ account, onClose }) {
   const state = useList(`/accounts/${encodeURIComponent(account.accountId)}/transactions`);
-  return <section className="panel"><div className="heading"><h2>Transactions · {account.accountId}</h2><button className="secondary" onClick={onClose}>Close history</button></div>
+  return <section className="panel tape-panel"><div className="heading"><h2>Transactions · {account.accountId}</h2><button className="secondary" onClick={onClose}>Close history</button></div>
     <ListStatus state={state} />
-    {!state.loading && !state.error && (state.items.length === 0 ? <p>No transactions yet.</p> : <div className="table-scroll"><table><caption>Transaction history, oldest first</caption><thead><tr><th>Date</th><th>Type</th><th className="money">Amount</th><th className="money">Balance after</th></tr></thead><tbody>{state.items.map(item => <tr key={item.txnId}><td>{new Date(item.date).toLocaleString()}</td><td>{item.type}</td><td className="money">{money(item.amount)}</td><td className="money">{money(item.balanceAfter)}</td></tr>)}</tbody></table></div>)}
+    {!state.loading && !state.error && (state.items.length === 0 ? <p>No transactions yet.</p> : <div className="tape"><table><caption>Transaction history, oldest first</caption><thead><tr><th>Date</th><th>Type</th><th className="money">Amount</th><th className="money">Balance after</th></tr></thead><tbody>{state.items.map(item => { const flow = flowOf(item.type); return <tr key={item.txnId}><td className="t-date">{new Date(item.date).toLocaleString()}</td><td className="t-type">{item.type}</td><td className={`money t-amount ${flow.className}`} data-label="Amount">{flow.sign && <span aria-hidden="true">{flow.sign}</span>}{money(item.amount)}</td><td className="money t-bal" data-label="Balance">{money(item.balanceAfter)}</td></tr>; })}</tbody></table></div>)}
   </section>;
 }
 
@@ -129,13 +130,13 @@ export default function Accounts({ customer, onBack, onNavigationLock }) {
     <p role="status">{message}</p>
     {operation && <Operation operation={operation} customer={customer} onBusy={setBusy} onCancel={() => setOperation(null)} onSuccess={text => { setOperation(null); setMessage(text); setRevision(value => value + 1); }} />}
     <ListStatus state={state} />
-    {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No accounts found." hint={customer ? "Open an account to begin this customer's ledger." : 'No account currently meets the premium balance threshold.'} /> : <div className="table-scroll"><table className="stack"><caption>{customer ? 'Customer accounts' : 'Premium accounts'}</caption><thead><tr><th>Account ID</th><th>Owner</th><th>Type</th><th>Opened</th><th className="money">Balance</th><th>Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
-      <th scope="row" className="identifier">{account.accountId}</th><td data-label="Owner">{account.userName}</td><td data-label="Type">{account.accountType}</td><td data-label="Opened">{shortDate(account.createdAt)}</td><td className="money" data-label="Balance">{money(account.balance)}</td><td><div className="actions account-actions">
+    {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No accounts found." hint={customer ? "Open an account to begin this customer's ledger." : 'No account currently meets the premium balance threshold.'} /> : <table className="cards"><caption>{customer ? 'Customer accounts' : 'Premium accounts'}</caption><thead><tr><th>Account ID</th><th>Owner</th><th>Type</th><th>Opened</th><th className="money">Balance</th><th>Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
+      <th scope="row" className="identifier c-id">{account.accountId}</th><td className="c-type" data-label="Type">{account.accountType}<span className="c-end">{endingIn(account.accountId)}</span></td><td className="c-owner" data-label="Owner">{account.userName}</td><td className="c-opened" data-label="Opened">{shortDate(account.createdAt)}</td><td className="money c-bal" data-label="Balance">{money(account.balance)}</td><td className="c-act"><div className="actions account-actions">
         <button disabled={disabled} onClick={() => begin('deposit', account)}>Deposit</button><button disabled={disabled} onClick={() => begin('withdraw', account)}>Withdraw</button>
         <button className="secondary" disabled={disabled} onClick={() => setHistory(account)}>History</button>
         <button className="secondary danger-text" disabled={disabled || !/^0(?:\.0+)?$/.test(String(account.balance))} title="Only zero-balance accounts can be deleted" aria-label={`Delete account ${account.accountId}`} onClick={() => begin('delete', account)}>Delete</button>
       </div></td>
-    </tr>)}</tbody></table></div>)}
+    </tr>)}</tbody></table>)}
     {history && <History key={history.accountId} account={history} onClose={() => setHistory(null)} />}
   </>;
 }

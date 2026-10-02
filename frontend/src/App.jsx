@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { customerRequest } from './api';
 import './styles.css';
 import Accounts from './Accounts';
-import logo from './assets/paper-maker-logo.png';
+import Shell from './Shell';
 import { Empty, Skeleton, Summary, initials, shortDate } from './ui';
 
 function CustomerForm({ customer, busy, onSave, onCancel }) {
@@ -33,9 +33,9 @@ function DeleteDialog({ customer, busy, error, onDelete, onCancel }) {
   </dialog>;
 }
 
-export default function App() {
+export default function App({ initialView, onSignOut }) {
   const [accountNavigationLocked, setAccountNavigationLocked] = useState(false);
-  const [accountView, setAccountView] = useState(null);
+  const [accountView, setAccountView] = useState(initialView === 'premium' ? { customer: null } : null);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -84,15 +84,12 @@ export default function App() {
     finally { setBusy(false); }
   }
 
-  return <>
-    <a className="skip-link" href="#main">Skip to content</a>
-    <header><div className="container brand-row"><img className="brand-logo" src={logo} alt="" /><div><p className="brand">Paper Maker Banking</p><p className="brand-sub">Private ledger for customers and accounts</p></div></div>
-      <nav aria-label="Main navigation"><div className="container nav-items">
-        <button disabled={navigationLocked} aria-current={!accountView ? 'page' : undefined} onClick={() => setAccountView(null)}>Customers</button>
-        <button disabled={navigationLocked} aria-current={accountView && !accountView.customer ? 'page' : undefined} onClick={() => setAccountView({ customer: null })}>Premium accounts</button>
-      </div></nav>
-    </header>
-    <main id="main" className="container">
+  const navItems = [
+    { label: 'Customers', current: !accountView, disabled: navigationLocked, onSelect: () => setAccountView(null) },
+    { label: 'Premium accounts', current: Boolean(accountView && !accountView.customer), disabled: navigationLocked, onSelect: () => setAccountView({ customer: null }) },
+  ];
+
+  return <Shell items={navItems} onSignOut={onSignOut}>
       {accountView ? <Accounts key={accountView.customer?.customerId || "premium"} onNavigationLock={setAccountNavigationLocked} customer={accountView.customer} onBack={() => setAccountView(null)} /> : <>
       <div className="heading"><div><h1 id="customers">Customers</h1><p>Manage customer names and contact details.</p></div><div className="actions"><button ref={addButton} disabled={loading || Boolean(loadError) || actionsLocked} onClick={() => { actionButton.current = addButton.current; setError(''); setMessage(''); setForm({ customer: null }); }}>Add customer</button></div></div>
       {!loading && !loadError && <Summary items={[['Customers on record', customers.length], ['Accept marketing', customers.filter(item => item.marketingEnabled === true).length]]} />}
@@ -104,8 +101,6 @@ export default function App() {
       </>}
       {deleting && <DeleteDialog customer={deleting} busy={busy} error={error} onDelete={remove} onCancel={closeDelete} />}
       </>}
-    </main>
-    <footer><div className="container footer-inner"><strong>Paper Maker Banking</strong><span>Customer management. Amounts are shown without a currency symbol.</span></div></footer>
-  </>;
+  </Shell>;
 }
 

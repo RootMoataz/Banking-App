@@ -7,6 +7,8 @@ export function initials(name = '') {
   return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 }
 
+export const endingIn = id => `Ending ${String(id).slice(-4)}`;
+
 export function Summary({ items }) {
   return <dl className="summary">{items.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>;
 }
