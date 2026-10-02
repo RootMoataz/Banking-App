@@ -551,6 +551,14 @@ refuse to clear any database whose name does not start with `paper_maker_test_`.
 Thresholds are pinned to the defaults, so a local `.env` does not change results.
 A full run takes a few minutes against Atlas.
 
+Tests that use the database are marked `atlas` automatically. Run
+`python -m pytest -m "not atlas"` for the offline tier only (no Atlas, no VPN
+issues) or `python -m pytest -m atlas` for the rest. The connection, the
+throwaway database and its indexes are set up once per session; each test only
+empties the collections first, and the `client` fixture builds a fresh app on
+that shared connection. Tests that need real app startup build `create_app`
+themselves.
+
 The suite is split by topic:
 
 | File | Coverage |
