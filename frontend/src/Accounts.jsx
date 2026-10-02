@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest } from './api';
+import { Empty, Skeleton, Summary, money, shortDate } from './ui';
 
-const money = value => Number(value).toFixed(2);
 const idPath = id => encodeURIComponent(id);
 const amountPattern = '(?:0|[1-9][0-9]{0,7})(?:[.][0-9]{1,2})?';
 const labels = { deposit: 'deposit', withdraw: 'withdrawal', transfer: 'transfer' };
@@ -21,7 +21,7 @@ function useList(path, revision = 0) {
 }
 
 function ListStatus({ state }) {
-  return state.loading ? <p>Loading...</p> : state.error ? <div><p role="alert" className="error">{state.error}</p><button type="button" onClick={state.retry}>Retry</button></div> : null;
+  return state.loading ? <><p className="loading-note">Loading...</p><Skeleton rows={3} /></> : state.error ? <div><p role="alert" className="error">{state.error}</p><button type="button" onClick={state.retry}>Retry</button></div> : null;
 }
 
 function TransferFields({ from, to, setFrom, setTo }) {
@@ -118,18 +118,19 @@ export default function Accounts({ customer, onBack, onNavigationLock }) {
   useEffect(() => { onNavigationLock?.(disabled); return () => onNavigationLock?.(false); }, [disabled, onNavigationLock]);
   function begin(kind, account) { setMessage(''); setHistory(null); setOperation({ kind, account }); }
   return <>
-    <button className="secondary" disabled={disabled} onClick={onBack}>Back to customers</button>
+    <button className="back-link" disabled={disabled} onClick={onBack}>Back to customers</button>
     <div className="heading"><h1>{customer ? `${customer.name}'s accounts` : 'Premium accounts'}</h1><div className="actions">
       {customer && <button disabled={disabled || state.loading || Boolean(state.error)} onClick={() => begin('open')}>Open account</button>}
       <button disabled={disabled} onClick={() => begin('transfer')}>Transfer</button>
       <button className="secondary" disabled={disabled || state.loading} onClick={state.retry}>Refresh accounts</button>
     </div></div>
-    {!customer && <p>Up to 200 accounts meeting the server's premium balance threshold, highest balance first.</p>}
+    {!customer && <p className="loading-note">Up to 200 accounts meeting the server's premium balance threshold, highest balance first.</p>}
+    {!state.loading && !state.error && state.items.length > 0 && <Summary items={[[customer ? 'Accounts held' : 'Accounts listed', state.items.length], [customer ? 'Combined balance' : 'Combined balance', money(state.items.reduce((sum, item) => sum + Number(item.balance), 0))], ...(customer ? [] : [['Highest balance', money(Math.max(...state.items.map(item => Number(item.balance))))]])]} />}
     <p role="status">{message}</p>
     {operation && <Operation operation={operation} customer={customer} onBusy={setBusy} onCancel={() => setOperation(null)} onSuccess={text => { setOperation(null); setMessage(text); setRevision(value => value + 1); }} />}
     <ListStatus state={state} />
-    {!state.loading && !state.error && (state.items.length === 0 ? <p className="panel">No accounts found.</p> : <div className="table-scroll"><table><caption>{customer ? 'Customer accounts' : 'Premium accounts'}</caption><thead><tr><th>Account ID</th><th>Owner</th><th>Type</th><th className="money">Balance</th><th>Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
-      <th scope="row" className="identifier">{account.accountId}</th><td>{account.userName}</td><td>{account.accountType}</td><td className="money">{money(account.balance)}</td><td><div className="actions account-actions">
+    {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No accounts found." hint={customer ? "Open an account to begin this customer's ledger." : 'No account currently meets the premium balance threshold.'} /> : <div className="table-scroll"><table className="stack"><caption>{customer ? 'Customer accounts' : 'Premium accounts'}</caption><thead><tr><th>Account ID</th><th>Owner</th><th>Type</th><th>Opened</th><th className="money">Balance</th><th>Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
+      <th scope="row" className="identifier">{account.accountId}</th><td data-label="Owner">{account.userName}</td><td data-label="Type">{account.accountType}</td><td data-label="Opened">{shortDate(account.createdAt)}</td><td className="money" data-label="Balance">{money(account.balance)}</td><td><div className="actions account-actions">
         <button disabled={disabled} onClick={() => begin('deposit', account)}>Deposit</button><button disabled={disabled} onClick={() => begin('withdraw', account)}>Withdraw</button>
         <button className="secondary" disabled={disabled} onClick={() => setHistory(account)}>History</button>
         <button className="secondary danger-text" disabled={disabled || !/^0(?:\.0+)?$/.test(String(account.balance))} title="Only zero-balance accounts can be deleted" aria-label={`Delete account ${account.accountId}`} onClick={() => begin('delete', account)}>Delete</button>

@@ -3,6 +3,7 @@ import { customerRequest } from './api';
 import './styles.css';
 import Accounts from './Accounts';
 import logo from './assets/paper-maker-logo.png';
+import { Empty, Skeleton, Summary, initials, shortDate } from './ui';
 
 function CustomerForm({ customer, busy, onSave, onCancel }) {
   const [name, setName] = useState(customer?.name || '');
@@ -84,7 +85,7 @@ export default function App() {
 
   return <>
     <a className="skip-link" href="#main">Skip to content</a>
-    <header><div className="container brand-row"><img className="brand-logo" src={logo} alt="" /><p className="brand">Paper Maker Banking</p></div>
+    <header><div className="container brand-row"><img className="brand-logo" src={logo} alt="" /><div><p className="brand">Paper Maker Banking</p><p className="brand-sub">Private ledger for customers and accounts</p></div></div>
       <nav aria-label="Main navigation"><div className="container nav-items">
         <button disabled={navigationLocked} aria-current={!accountView ? 'page' : undefined} onClick={() => setAccountView(null)}>Customers</button>
         <button disabled={navigationLocked} aria-current={accountView && !accountView.customer ? 'page' : undefined} onClick={() => setAccountView({ customer: null })}>Premium accounts</button>
@@ -92,17 +93,18 @@ export default function App() {
     </header>
     <main id="main" className="container">
       {accountView ? <Accounts key={accountView.customer?.customerId || "premium"} onNavigationLock={setAccountNavigationLocked} customer={accountView.customer} onBack={() => setAccountView(null)} /> : <>
-      <div className="heading"><div><h1 id="customers">Customers</h1><p>Manage customer names and contact details.</p></div><button ref={addButton} disabled={loading || Boolean(loadError) || busy || Boolean(form) || Boolean(deleting)} onClick={() => { actionButton.current = addButton.current; setError(''); setMessage(''); setForm({ customer: null }); }}>Add customer</button></div>
+      <div className="heading"><div><h1 id="customers">Customers</h1><p>Manage customer names and contact details.</p></div><div className="actions"><button ref={addButton} disabled={loading || Boolean(loadError) || busy || Boolean(form) || Boolean(deleting)} onClick={() => { actionButton.current = addButton.current; setError(''); setMessage(''); setForm({ customer: null }); }}>Add customer</button></div></div>
+      {!loading && !loadError && <Summary items={[['Customers on record', customers.length], ['Accept marketing', customers.filter(item => item.marketingEnabled === true).length]]} />}
       <p role="status">{message}</p>
-      {loading ? <p>Loading customers…</p> : loadError ? <div className="panel"><p role="alert" className="error">{loadError}</p><button onClick={() => setReload(value => value + 1)}>Retry</button></div> : <>
+      {loading ? <><p className="loading-note">Loading customers…</p><Skeleton rows={5} /></> : loadError ? <div className="panel"><p role="alert" className="error">{loadError}</p><button onClick={() => setReload(value => value + 1)}>Retry</button></div> : <>
         {error && !deleting && <p role="alert" className="error">{error}</p>}
         {form && <CustomerForm key={form.customer?.customerId || 'new'} customer={form.customer} busy={busy} onSave={save} onCancel={closeEditor} />}
-        {customers.length === 0 ? <p className="panel">No customers yet.</p> : <div className="table-scroll"><table><caption>{customers.length} {customers.length === 1 ? 'customer' : 'customers'}</caption><thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Customer ID</th><th scope="col">Actions</th></tr></thead><tbody>{customers.map(customer => <tr key={customer.customerId}><th scope="row">{customer.name}</th><td>{customer.email}</td><td className="identifier">{customer.customerId}</td><td><div className="actions"><button className="secondary" disabled={busy || Boolean(form) || Boolean(deleting)} aria-label={`Accounts for ${customer.name}`} onClick={() => setAccountView({ customer })}>Accounts</button><button className="secondary" disabled={busy || Boolean(form) || Boolean(deleting)} aria-label={`Edit ${customer.name}`} onClick={event => { actionButton.current = event.currentTarget; setError(''); setMessage(''); setForm({ customer }); }}>Edit</button><button className="secondary danger-text" disabled={busy || Boolean(form) || Boolean(deleting)} aria-label={`Delete ${customer.name}`} onClick={event => { actionButton.current = event.currentTarget; setError(''); setMessage(''); setDeleting(customer); }}>Delete</button></div></td></tr>)}</tbody></table></div>}
+        {customers.length === 0 ? <Empty title="No customers yet." hint="Add the first customer to start the register." /> : <div className="table-scroll"><table className="stack"><caption>{customers.length} {customers.length === 1 ? 'customer' : 'customers'}</caption><thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Customer ID</th><th scope="col">Customer since</th><th scope="col">Actions</th></tr></thead><tbody>{customers.map(customer => <tr key={customer.customerId}><th scope="row"><span className="person"><span className="monogram" aria-hidden="true">{initials(customer.name)}</span><span>{customer.name}</span></span></th><td data-label="Email">{customer.email}</td><td className="identifier" data-label="Customer ID">{customer.customerId}</td><td data-label="Customer since">{shortDate(customer.createdAt)}</td><td><div className="actions"><button className="secondary" disabled={busy || Boolean(form) || Boolean(deleting)} aria-label={`Accounts for ${customer.name}`} onClick={() => setAccountView({ customer })}>Accounts</button><button className="secondary" disabled={busy || Boolean(form) || Boolean(deleting)} aria-label={`Edit ${customer.name}`} onClick={event => { actionButton.current = event.currentTarget; setError(''); setMessage(''); setForm({ customer }); }}>Edit</button><button className="secondary danger-text" disabled={busy || Boolean(form) || Boolean(deleting)} aria-label={`Delete ${customer.name}`} onClick={event => { actionButton.current = event.currentTarget; setError(''); setMessage(''); setDeleting(customer); }}>Delete</button></div></td></tr>)}</tbody></table></div>}
       </>}
       {deleting && <DeleteDialog customer={deleting} busy={busy} error={error} onDelete={remove} onCancel={closeDelete} />}
       </>}
     </main>
-    <footer className="container">Paper Maker Banking · Customer management</footer>
+    <footer><div className="container footer-inner"><strong>Paper Maker Banking</strong><span>Customer management. Amounts are shown without a currency symbol.</span></div></footer>
   </>;
 }
 
