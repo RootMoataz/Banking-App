@@ -24,7 +24,7 @@ erDiagram
         string txnId PK
         string accountId "kept after the account is deleted"
         string customerId "kept after the customer is deleted"
-        string type "DEPOSIT, WITHDRAW, TRANSFER_OUT or TRANSFER_IN"
+        string type "DEPOSIT, WITHDRAW, TRANSFER_OUT, TRANSFER_IN or ACCOUNT_CLOSED"
         decimal amount
         decimal balanceAfter
         datetime date
@@ -57,7 +57,8 @@ stores money as whole cents; the API shows decimal strings.
   owner, and no 409 is returned. The transaction updates the customer's
   document first, so a concurrent account creation or money operation for that
   customer conflicts and retries, then finds the customer or account gone.
-  Transactions and notifications are not deleted.
+  Each account with a balance first gets an `ACCOUNT_CLOSED` transaction
+  recording the amount removed. Transactions and notifications are not deleted.
 - Account deletion requires a zero balance (409 otherwise), so money is never
   discarded by deleting an account.
 - **Transactions are kept** when an account or customer is deleted, including
