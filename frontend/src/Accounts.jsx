@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { apiRequest } from './api';
 import { Empty, Skeleton, Summary, money, shortDate } from './ui';
 
-const idPath = id => encodeURIComponent(id);
 const amountPattern = '(?:0|[1-9][0-9]{0,7})(?:[.][0-9]{1,2})?';
 const labels = { deposit: 'deposit', withdraw: 'withdrawal', transfer: 'transfer' };
 
@@ -54,6 +53,7 @@ function Operation({ operation, customer, onCancel, onSuccess, onBusy }) {
   const lock = useRef(false);
   const dialog = useRef(null);
   const { kind, account } = operation;
+  const label = labels[kind] && `${labels[kind][0].toUpperCase()}${labels[kind].slice(1)}`;
   useEffect(() => { if (kind === 'delete') dialog.current?.showModal(); }, [kind]);
 
   async function submit(event) {
@@ -67,14 +67,14 @@ function Operation({ operation, customer, onCancel, onSuccess, onBusy }) {
     lock.current = true; setBusy(true); onBusy(true); setError('');
     try {
       let path, options;
-      if (kind === 'delete') { path = `/accounts/${idPath(account.accountId)}`; options = { method: 'DELETE' }; }
+      if (kind === 'delete') { path = `/accounts/${encodeURIComponent(account.accountId)}`; options = { method: 'DELETE' }; }
       else if (kind === 'open') { path = '/accounts'; options = { method: 'POST', data: { customerId: customer.customerId, accountType: accountType.trim() } }; }
       else {
-        path = kind === 'transfer' ? '/transfers' : `/accounts/${idPath(account.accountId)}/${kind}`;
+        path = kind === 'transfer' ? '/transfers' : `/accounts/${encodeURIComponent(account.accountId)}/${kind}`;
         options = { method: 'POST', idempotencyKey: crypto.randomUUID(), data: kind === 'transfer' ? { fromAccountId: from, toAccountId: to, amount } : { amount } };
       }
       await apiRequest(path, options);
-      onSuccess(kind === 'open' ? 'Account opened.' : kind === 'delete' ? 'Account deleted.' : `${labels[kind][0].toUpperCase()}${labels[kind].slice(1)} completed.`);
+      onSuccess(kind === 'open' ? 'Account opened.' : kind === 'delete' ? 'Account deleted.' : `${label} completed.`);
     } catch (err) { setError(`${err.message}${labels[kind] && err.message.startsWith('Unable to reach') ? ' The result is unknown. Check account balances and history before submitting again.' : ''}`); }
     finally { lock.current = false; setBusy(false); onBusy(false); }
   }
@@ -86,7 +86,7 @@ function Operation({ operation, customer, onCancel, onSuccess, onBusy }) {
     <div className="actions"><button autoFocus disabled={busy} className="secondary" onClick={onCancel}>Cancel</button><button disabled={busy} className="danger" onClick={submit}>{busy ? 'Deleting...' : 'Delete account'}</button></div>
   </dialog>;
   return <section className="panel" aria-labelledby="operation-title">
-    <h2 id="operation-title">{kind === 'open' ? 'Open account' : `${labels[kind][0].toUpperCase()}${labels[kind].slice(1)}`}{account ? ` · ${account.accountId}` : ''}</h2>
+    <h2 id="operation-title">{kind === 'open' ? 'Open account' : label}{account ? ` · ${account.accountId}` : ''}</h2>
     {error && <p role="alert" className="error">{error}</p>}
     <form onSubmit={submit}><fieldset disabled={busy}>
       {kind === 'open' ? <><label htmlFor="account-type">Account type</label><input id="account-type" autoFocus required maxLength={50} value={accountType} onChange={event => setAccountType(event.target.value)} /></> : <>
@@ -100,7 +100,7 @@ function Operation({ operation, customer, onCancel, onSuccess, onBusy }) {
 }
 
 function History({ account, onClose }) {
-  const state = useList(`/accounts/${idPath(account.accountId)}/transactions`);
+  const state = useList(`/accounts/${encodeURIComponent(account.accountId)}/transactions`);
   return <section className="panel"><div className="heading"><h2>Transactions · {account.accountId}</h2><button className="secondary" onClick={onClose}>Close history</button></div>
     <ListStatus state={state} />
     {!state.loading && !state.error && (state.items.length === 0 ? <p>No transactions yet.</p> : <div className="table-scroll"><table><caption>Transaction history, oldest first</caption><thead><tr><th>Date</th><th>Type</th><th className="money">Amount</th><th className="money">Balance after</th></tr></thead><tbody>{state.items.map(item => <tr key={item.txnId}><td>{new Date(item.date).toLocaleString()}</td><td>{item.type}</td><td className="money">{money(item.amount)}</td><td className="money">{money(item.balanceAfter)}</td></tr>)}</tbody></table></div>)}
@@ -109,7 +109,7 @@ function History({ account, onClose }) {
 
 export default function Accounts({ customer, onBack, onNavigationLock }) {
   const [revision, setRevision] = useState(0);
-  const state = useList(customer ? `/customers/${idPath(customer.customerId)}/accounts` : '/accounts/premium?limit=200', revision);
+  const state = useList(customer ? `/customers/${encodeURIComponent(customer.customerId)}/accounts` : '/accounts/premium?limit=200', revision);
   const [operation, setOperation] = useState(null);
   const [history, setHistory] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -125,7 +125,7 @@ export default function Accounts({ customer, onBack, onNavigationLock }) {
       <button className="secondary" disabled={disabled || state.loading} onClick={state.retry}>Refresh accounts</button>
     </div></div>
     {!customer && <p className="loading-note">Up to 200 accounts meeting the server's premium balance threshold, highest balance first.</p>}
-    {!state.loading && !state.error && state.items.length > 0 && <Summary items={[[customer ? 'Accounts held' : 'Accounts listed', state.items.length], [customer ? 'Combined balance' : 'Combined balance', money(state.items.reduce((sum, item) => sum + Number(item.balance), 0))], ...(customer ? [] : [['Highest balance', money(Math.max(...state.items.map(item => Number(item.balance))))]])]} />}
+    {!state.loading && !state.error && state.items.length > 0 && <Summary items={[[customer ? 'Accounts held' : 'Accounts listed', state.items.length], ['Combined balance', money(state.items.reduce((sum, item) => sum + Number(item.balance), 0))], ...(customer ? [] : [['Highest balance', money(Math.max(...state.items.map(item => Number(item.balance))))]])]} />}
     <p role="status">{message}</p>
     {operation && <Operation operation={operation} customer={customer} onBusy={setBusy} onCancel={() => setOperation(null)} onSuccess={text => { setOperation(null); setMessage(text); setRevision(value => value + 1); }} />}
     <ListStatus state={state} />
