@@ -52,7 +52,23 @@ def clean_collections(request):
         db[name].delete_many({})
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "atlas: needs the MongoDB Atlas test database (deselect with -m 'not atlas')")
+
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if "db" in item.fixturenames or "client" in item.fixturenames:
+            item.add_marker(pytest.mark.atlas)
+
+
 @pytest.fixture
-def client(settings, db):
+def client(settings, db, monkeypatch):
+    # A fresh app per test, but on the session's connection and indexes: startup would otherwise open a new
+    # MongoClient and recreate nine indexes on Atlas for every test. Tests that need the real startup path
+    # (index creation, two app instances) build create_app(settings) themselves and do not use this fixture.
+    monkeypatch.setattr("app.main.get_database", lambda _settings: db)
+    monkeypatch.setattr("app.main.ensure_indexes", lambda _db: None)
+    monkeypatch.setattr(db.client, "close", lambda: None)  # app shutdown must not close the shared client
     with TestClient(create_app(settings)) as test_client:
         yield test_client
