@@ -86,14 +86,38 @@ def test_delete_customer_cascades_to_accounts_and_keeps_history(client, db):
     assert client.get(f"/api/accounts/{kept}").json()["balance"] == "5.00"
     # Transactions and notifications stay for audit.
     audit = client.get("/api/audit/transactions", params={"customerId": owner}).json()["items"]
-    assert [(t["accountId"], t["type"]) for t in audit] == [(funded, "DEPOSIT"), (funded, "WITHDRAW")]
+    assert [(t["accountId"], t["type"]) for t in audit] == [(funded, "DEPOSIT"), (funded, "WITHDRAW"),
+                                                           (funded, "ACCOUNT_CLOSED")]
     assert db.notifications.count_documents({"customerId": ObjectId(owner)}) == 1
     assert client.delete(f"/api/customers/{owner}").status_code == 404
+
+
+def test_delete_customer_records_closing_transaction_for_funded_account_only(client, db):
+    owner = customer(client)["customerId"]
+    funded, empty = account(client, owner)["accountId"], account(client, owner)["accountId"]
+    client.post(f"/api/accounts/{funded}/deposit", json={"amount": "100.00"})
+    assert client.delete(f"/api/customers/{owner}").status_code == 204
+    assert client.get(f"/api/accounts/{funded}").status_code == 404
+    items = client.get("/api/audit/transactions", params={"customerId": owner}).json()["items"]
+    assert [(t["accountId"], t["type"]) for t in items] == [(funded, "DEPOSIT"), (funded, "ACCOUNT_CLOSED")]
+    closed = items[1]
+    assert (closed["amount"], closed["balanceAfter"], closed["customerId"]) == ("100.00", "0.00", owner)
+    assert closed["transferId"] is None and closed["fromAccountId"] is None and closed["toAccountId"] is None
+    assert closed["date"] > items[0]["date"]
+    assert db.transactions.count_documents({"accountId": ObjectId(empty)}) == 0
+
+
+def test_delete_customer_with_only_empty_accounts_records_nothing(client, db):
+    owner = customer(client)["customerId"]
+    account(client, owner)
+    assert client.delete(f"/api/customers/{owner}").status_code == 204
+    assert db.transactions.count_documents({"customerId": ObjectId(owner)}) == 0
 
 
 def test_failed_cascade_deletes_nothing(client, db, monkeypatch):
     owner = customer(client)["customerId"]
     id = account(client, owner)["accountId"]
+    client.post(f"/api/accounts/{id}/deposit", json={"amount": "10.00"})
 
     def fail(*args, **kwargs):
         raise RuntimeError("customer delete failed")
@@ -101,6 +125,7 @@ def test_failed_cascade_deletes_nothing(client, db, monkeypatch):
     with pytest.raises(RuntimeError):
         client.delete(f"/api/customers/{owner}")
     assert client.get(f"/api/accounts/{id}").status_code == 200  # the account delete rolled back too
+    assert db.transactions.count_documents({"accountId": ObjectId(id), "type": "ACCOUNT_CLOSED"}) == 0
 
 
 def test_account_crud_and_deletion_rules(client):

@@ -98,7 +98,13 @@ class AccountRepository:
         query = {} if customer_oid is None else {"customerId": customer_oid}
         return list(self.collection.find(query).sort("_id").limit(limit or 0))
 
-    def delete_for(self, customer_oid: ObjectId, session: ClientSession) -> None:
+    def delete_for(self, customer_oid: ObjectId, transactions: "TransactionRepository",
+                   session: ClientSession) -> None:
+        """Delete the customer's accounts; each one with a balance first gets an ACCOUNT_CLOSED record for it."""
+        for account in self.collection.find({"customerId": customer_oid}, session=session):
+            if account["balanceCents"] != 0:
+                transactions.insert({**account, "balanceCents": 0}, "ACCOUNT_CLOSED", account["balanceCents"], None,
+                                    session)
         self.collection.delete_many({"customerId": customer_oid}, session=session)
 
     def update_type(self, oid: ObjectId, account_type: str) -> dict | None:
