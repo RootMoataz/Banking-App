@@ -66,7 +66,7 @@ MongoDB Atlas cluster with a database user that can read and write the chosen
 database and create its indexes. Allow your machine's IP in Atlas Network Access.
 
 ```sh
-git clone --branch 2_api-atlas-claude https://github.com/RootMoataz/Paper-Maker-Banking-App.git
+git clone --branch 2_api-mongodb-atlas https://github.com/RootMoataz/Paper-Maker-Banking-App.git
 cd Paper-Maker-Banking-App
 python -m venv .venv
 ```
@@ -567,5 +567,5 @@ database with many other accounts.
 | Branch | Contents |
 | --- | --- |
 | `1_backend-rest-api-without-db` | In-memory backend milestone |
-| `2_api-atlas-claude` | MongoDB Atlas storage |
+| `2_api-mongodb-atlas` | MongoDB Atlas storage |
 | `3_react-frontend` | This branch: React frontend on the Atlas backend |

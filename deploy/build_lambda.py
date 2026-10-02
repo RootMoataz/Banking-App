@@ -23,7 +23,9 @@ def main() -> None:
     subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--target", str(BUILD),
                     "--platform", "manylinux2014_x86_64", "--python-version", "3.12",
                     "--implementation", "cp", "--only-binary=:all:", *REQUIREMENTS], check=True)
-    shutil.copytree(ROOT / "app", BUILD / "app", ignore=shutil.ignore_patterns("__pycache__", "graphify-out"))
+    (BUILD / "app").mkdir()
+    for source in (ROOT / "app").glob("*.py"):
+        shutil.copy(source, BUILD / "app" / source.name)
     shutil.copy(ROOT / "deploy" / "lambda_handler.py", BUILD / "lambda_handler.py")
     with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(BUILD.rglob("*")):
