@@ -87,6 +87,7 @@ class CustomerService:
         self.settings = settings
         self.customers = CustomerRepository(db)
         self.accounts = AccountRepository(db)
+        self.transactions = TransactionRepository(db)
         self.notifications = NotificationRepository(db)
 
     def _insert(self, data: UserCreate) -> dict:
@@ -146,8 +147,9 @@ class CustomerService:
             # retry, so it then finds the customer or account gone and no orphan account is left.
             if self.customers.touch(customer_oid, session) is None:
                 raise BankError(404, "Customer not found")
-            # Every account goes with its customer, whatever its balance; transactions and notifications stay for audit.
-            self.accounts.delete_for(customer_oid, session)
+            # Every account goes with its customer, whatever its balance; a closing record keeps the removed balance in
+            # the ledger. Transactions and notifications stay for audit.
+            self.accounts.delete_for(customer_oid, self.transactions, session)
             self.customers.delete(customer_oid, session)
 
         _in_transaction(self.db, work)
