@@ -873,7 +873,7 @@
         "method": "DELETE",
         "header": [],
         "url": "{{baseUrl}}/api/customers/{{customerId}}",
-        "description": "Deletes the customer and their remaining account (the second one still holds 25.00) in one step. Transactions and notifications are kept."
+        "description": "Deletes the customer and their remaining account (the second one still holds 25.00) in one step. An ACCOUNT_CLOSED transaction records the 25.00 removed. Transactions and notifications remain stored in the database, but notifications are no longer readable through the API (the notifications endpoint returns 404 for a deleted customer)."
       },
       "event": [
         {
@@ -942,7 +942,7 @@
               "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
               "pm.test(\"History survives deletion\", () => {",
               "  const r = pm.response.json();",
-              "  pm.expect(r.items.map(t => t.type)).to.eql([\"DEPOSIT\", \"WITHDRAW\", \"TRANSFER_OUT\", \"TRANSFER_IN\", \"WITHDRAW\"]);",
+              "  pm.expect(r.items.map(t => t.type)).to.eql([\"DEPOSIT\", \"WITHDRAW\", \"TRANSFER_OUT\", \"TRANSFER_IN\", \"WITHDRAW\", \"ACCOUNT_CLOSED\"]);",
               "  pm.expect(r.items.map(t => t.accountId).filter((id, i, all) => all.indexOf(id) === i).sort()).to.eql([pm.collectionVariables.get(\"accountId\"), pm.collectionVariables.get(\"secondAccountId\")].sort());",
               "});"
             ]

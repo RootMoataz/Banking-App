@@ -139,8 +139,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.delete("/api/customers/{id}", status_code=204, tags=["Customers"],
                 summary="DeleteCustomer", responses={404: {"description": "Customer not found"}})
     def delete_customer(id: Id):
-        """Delete the customer and all their accounts, whatever the balances, in one step. Their transactions and
-        notifications are kept, so the audit still shows them."""
+        """Delete the customer and all their accounts, whatever the balances, in one step. An ACCOUNT_CLOSED
+        transaction records any balance removed. Transactions and notifications remain stored in the database, so the
+        audit still shows the transactions; notifications are no longer readable through the API (the notifications
+        endpoint returns 404 for a deleted customer)."""
         app.state.customers.delete_customer(ObjectId(id))
         return Response(status_code=204)
 
