@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { customerRequest } from './api';
 import './styles.css';
 import Accounts from './Accounts';
+import logo from './assets/paper-maker-logo.png';
 
 function CustomerForm({ customer, busy, onSave, onCancel }) {
   const [name, setName] = useState(customer?.name || '');
@@ -32,6 +33,7 @@ function DeleteDialog({ customer, busy, error, onDelete, onCancel }) {
 }
 
 export default function App() {
+  const [accountNavigationLocked, setAccountNavigationLocked] = useState(false);
   const [accountView, setAccountView] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +44,7 @@ export default function App() {
   const [form, setForm] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [busy, setBusy] = useState(false);
+  const navigationLocked = accountNavigationLocked || busy || Boolean(form) || Boolean(deleting);
   const addButton = useRef(null);
   const actionButton = useRef(null);
 
@@ -81,10 +84,14 @@ export default function App() {
 
   return <>
     <a className="skip-link" href="#main">Skip to content</a>
-    <header><div className="container"><p className="brand">Paper Maker Banking</p><nav aria-label="Main navigation">{accountView ? <span>Accounts</span> : <a href="#customers" aria-current="page">Customers</a>}</nav></div></header>
+    <header><div className="container brand-row"><img className="brand-logo" src={logo} alt="" /><p className="brand">Paper Maker Banking</p></div>
+      <nav aria-label="Main navigation"><div className="container nav-items">
+        <button disabled={navigationLocked} aria-current={!accountView ? 'page' : undefined} onClick={() => setAccountView(null)}>Customers</button>
+        <button disabled={navigationLocked} aria-current={accountView && !accountView.customer ? 'page' : undefined} onClick={() => setAccountView({ customer: null })}>Premium accounts</button>
+      </div></nav>
+    </header>
     <main id="main" className="container">
-      {accountView ? <Accounts customer={accountView.customer} onBack={() => setAccountView(null)} /> : <>
-      <button className="secondary" disabled={busy || Boolean(form) || Boolean(deleting)} onClick={() => setAccountView({ customer: null })}>Premium accounts</button>
+      {accountView ? <Accounts key={accountView.customer?.customerId || "premium"} onNavigationLock={setAccountNavigationLocked} customer={accountView.customer} onBack={() => setAccountView(null)} /> : <>
       <div className="heading"><div><h1 id="customers">Customers</h1><p>Manage customer names and contact details.</p></div><button ref={addButton} disabled={loading || Boolean(loadError) || busy || Boolean(form) || Boolean(deleting)} onClick={() => { actionButton.current = addButton.current; setError(''); setMessage(''); setForm({ customer: null }); }}>Add customer</button></div>
       <p role="status">{message}</p>
       {loading ? <p>Loading customers…</p> : loadError ? <div className="panel"><p role="alert" className="error">{loadError}</p><button onClick={() => setReload(value => value + 1)}>Retry</button></div> : <>

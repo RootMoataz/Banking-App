@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest } from './api';
 
+const money = value => Number(value).toFixed(2);
 const idPath = id => encodeURIComponent(id);
 const amountPattern = '(?:0|[1-9][0-9]{0,7})(?:[.][0-9]{1,2})?';
 const labels = { deposit: 'deposit', withdraw: 'withdrawal', transfer: 'transfer' };
@@ -32,7 +33,7 @@ function TransferFields({ from, to, setFrom, setTo }) {
       <label htmlFor="from-account">From account</label>
       <select id="from-account" required value={from} onChange={event => { setFrom(event.target.value); if (event.target.value === to) setTo(''); }}>
         <option value="">Choose source account</option>
-        {state.items.map(item => <option key={item.accountId} value={item.accountId}>{item.userName} · {item.accountType} · {item.accountId} · {item.balance}</option>)}
+        {state.items.map(item => <option key={item.accountId} value={item.accountId}>{item.userName} · {item.accountType} · {item.accountId} · {money(item.balance)}</option>)}
       </select>
       <label htmlFor="to-account">To account</label>
       <select id="to-account" required value={to} onChange={event => setTo(event.target.value)}>
@@ -102,11 +103,11 @@ function History({ account, onClose }) {
   const state = useList(`/accounts/${idPath(account.accountId)}/transactions`);
   return <section className="panel"><div className="heading"><h2>Transactions · {account.accountId}</h2><button className="secondary" onClick={onClose}>Close history</button></div>
     <ListStatus state={state} />
-    {!state.loading && !state.error && (state.items.length === 0 ? <p>No transactions yet.</p> : <div className="table-scroll"><table><caption>Transaction history, oldest first</caption><thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Balance after</th></tr></thead><tbody>{state.items.map(item => <tr key={item.txnId}><td>{new Date(item.date).toLocaleString()}</td><td>{item.type}</td><td>{item.amount}</td><td>{item.balanceAfter}</td></tr>)}</tbody></table></div>)}
+    {!state.loading && !state.error && (state.items.length === 0 ? <p>No transactions yet.</p> : <div className="table-scroll"><table><caption>Transaction history, oldest first</caption><thead><tr><th>Date</th><th>Type</th><th className="money">Amount</th><th className="money">Balance after</th></tr></thead><tbody>{state.items.map(item => <tr key={item.txnId}><td>{new Date(item.date).toLocaleString()}</td><td>{item.type}</td><td className="money">{money(item.amount)}</td><td className="money">{money(item.balanceAfter)}</td></tr>)}</tbody></table></div>)}
   </section>;
 }
 
-export default function Accounts({ customer, onBack }) {
+export default function Accounts({ customer, onBack, onNavigationLock }) {
   const [revision, setRevision] = useState(0);
   const state = useList(customer ? `/customers/${idPath(customer.customerId)}/accounts` : '/accounts/premium?limit=200', revision);
   const [operation, setOperation] = useState(null);
@@ -114,6 +115,7 @@ export default function Accounts({ customer, onBack }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const disabled = busy || Boolean(operation);
+  useEffect(() => { onNavigationLock?.(disabled); return () => onNavigationLock?.(false); }, [disabled, onNavigationLock]);
   function begin(kind, account) { setMessage(''); setHistory(null); setOperation({ kind, account }); }
   return <>
     <button className="secondary" disabled={disabled} onClick={onBack}>Back to customers</button>
@@ -126,8 +128,8 @@ export default function Accounts({ customer, onBack }) {
     <p role="status">{message}</p>
     {operation && <Operation operation={operation} customer={customer} onBusy={setBusy} onCancel={() => setOperation(null)} onSuccess={text => { setOperation(null); setMessage(text); setRevision(value => value + 1); }} />}
     <ListStatus state={state} />
-    {!state.loading && !state.error && (state.items.length === 0 ? <p className="panel">No accounts found.</p> : <div className="table-scroll"><table><caption>{customer ? 'Customer accounts' : 'Premium accounts'}</caption><thead><tr><th>Account ID</th><th>Owner</th><th>Type</th><th>Balance</th><th>Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
-      <th scope="row" className="identifier">{account.accountId}</th><td>{account.userName}</td><td>{account.accountType}</td><td>{account.balance}</td><td><div className="actions account-actions">
+    {!state.loading && !state.error && (state.items.length === 0 ? <p className="panel">No accounts found.</p> : <div className="table-scroll"><table><caption>{customer ? 'Customer accounts' : 'Premium accounts'}</caption><thead><tr><th>Account ID</th><th>Owner</th><th>Type</th><th className="money">Balance</th><th>Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
+      <th scope="row" className="identifier">{account.accountId}</th><td>{account.userName}</td><td>{account.accountType}</td><td className="money">{money(account.balance)}</td><td><div className="actions account-actions">
         <button disabled={disabled} onClick={() => begin('deposit', account)}>Deposit</button><button disabled={disabled} onClick={() => begin('withdraw', account)}>Withdraw</button>
         <button className="secondary" disabled={disabled} onClick={() => setHistory(account)}>History</button>
         <button className="secondary danger-text" disabled={disabled || !/^0(?:\.0+)?$/.test(String(account.balance))} title="Only zero-balance accounts can be deleted" aria-label={`Delete account ${account.accountId}`} onClick={() => begin('delete', account)}>Delete</button>
