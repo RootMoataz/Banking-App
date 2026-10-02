@@ -4,15 +4,19 @@
 
 # Paper Maker Banking App
 
-**Python · FastAPI · MongoDB Atlas**
+**React · Vite · FastAPI · MongoDB Atlas**
 
-Backend REST API with a MongoDB Atlas database
+React frontend for the Paper Maker banking API
 
-[Setup](#steps-to-initialize-this-branch-of-the-app) · [API](#the-api-at-a-glance) · [Messages](#customer-categories-and-messages) · [Architecture](#current-architecture-of-the-branch)
+[Frontend](#the-react-frontend) · [Setup](#steps-to-initialize-this-branch-of-the-app) · [API](#the-api-at-a-glance) · [Messages](#customer-categories-and-messages) · [Architecture](#current-architecture-of-the-branch)
 
 </div>
 
 ---
+
+This branch adds a React frontend (in `frontend/`) on top of the Atlas-backed
+FastAPI backend described below. See [The React frontend](#the-react-frontend)
+to run it.
 
 Paper Maker Banking App is a FastAPI backend for managing customers and their
 accounts. It supports deposits, withdrawals, transfers between any two accounts,
@@ -32,6 +36,28 @@ repositories handle HTTP requests, business rules, and storage respectively.
 > network. Notifications are stored for retrieval through the API; they are not
 > sent by email or push, and loan messages do not indicate loan eligibility or
 > approval.
+
+## The React frontend
+
+A Vite + React app in `frontend/` for the API below: customer list, add, edit and
+confirmed delete; per-customer accounts with open, deposit, withdraw, transfer,
+transaction history and account delete; and the premium-accounts list. It is
+styled as a paper-and-banknote-green private ledger with serif headings.
+
+```bash
+cd frontend
+npm install
+npm run dev      # http://localhost:5173
+npm test         # 19 tests, HTTP mocked, no database needed
+npm run build
+```
+
+Start the backend first (see the steps below). The API URL defaults to
+`http://localhost:8000`; set `VITE_API_BASE_URL` in `frontend/.env.local` to
+change it. Money is sent as decimal strings with a fresh idempotency key per
+deposit, withdrawal or transfer, and there are no automatic retries. Search,
+notifications, marketing opt-in and audit views are API-only for now. More
+detail is in `frontend/README.md`.
 
 ## Steps to initialize this branch of the App
 
@@ -507,5 +533,5 @@ database with many other accounts.
 | Branch | Contents |
 | --- | --- |
 | `1_backend-rest-api-without-db` | In-memory backend milestone |
-| `2_api-atlas-claude` | This branch: MongoDB Atlas storage |
-| `3_react-frontend` | React frontend |
+| `2_api-atlas-claude` | MongoDB Atlas storage |
+| `3_react-frontend` | This branch: React frontend on the Atlas backend |
