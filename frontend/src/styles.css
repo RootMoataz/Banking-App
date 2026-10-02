@@ -29,6 +29,8 @@ caption { text-align: left; padding: 1rem; color: #536174; }
 th, td { padding: 1rem; border-top: 1px solid #e1e5eb; overflow-wrap: anywhere; }
 thead { background: #f0f3f7; }
 .identifier { font-family: monospace; font-size: .85rem; }
+select { font: inherit; width: 100%; padding: .65rem; margin-bottom: 1rem; border: 1px solid #8591a1; border-radius: 5px; }
+td .account-actions { flex-wrap: wrap; min-width: 180px; }
 td .actions { flex-wrap: nowrap; gap: .5rem; }
 .error { color: #991b1b; background: #fff0f0; padding: 1rem; border-radius: 5px; }
 dialog { border: 1px solid #a3adba; border-radius: 8px; padding: 1.5rem; max-width: 520px; width: calc(100% - 2rem); }

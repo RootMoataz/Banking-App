@@ -1,11 +1,15 @@
 const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/+$/, '');
 
-export async function customerRequest(path = '', { method = 'GET', data, signal } = {}) {
+export function customerRequest(path = '', options = {}) {
+  return apiRequest(`/customers${path}`, options);
+}
+
+export async function apiRequest(path, { method = 'GET', data, signal, idempotencyKey } = {}) {
   let response;
   try {
-    response = await fetch(`${baseUrl}/api/customers${path}`, {
+    response = await fetch(`${baseUrl}/api${path}`, {
       method, signal,
-      ...(data ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) } : {}),
+      ...(data ? { headers: { 'Content-Type': 'application/json', ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}) }, body: JSON.stringify(data) } : {}),
     });
   } catch (error) {
     if (error.name === 'AbortError') throw error;

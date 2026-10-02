@@ -73,3 +73,14 @@ it('keeps form values on a rejected save and displays API errors', async () => {
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Email already exists'));
   expect(screen.getByLabelText('Email')).toHaveValue(ada.email);
 });
+
+it('opens the selected customer accounts and returns to customers', async () => {
+  fetchMock.mockResolvedValueOnce(response([ada])).mockResolvedValueOnce(response([]));
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(await screen.findByRole('button', { name: `Accounts for ${ada.name}` }));
+  expect(await screen.findByText('No accounts found.')).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining(`/customers/${ada.customerId}/accounts`), expect.any(Object));
+  await user.click(screen.getByRole('button', { name: 'Back to customers' }));
+  expect(screen.getByText(ada.name)).toBeInTheDocument();
+});
