@@ -413,11 +413,13 @@ a retried transaction cannot store a message twice.
 
 - `DELETE /api/customers/{id}` no longer answers 409 while the customer has
   accounts: it deletes the customer and all their accounts, whatever their
-  balances, in one transaction. Their transactions and notifications are kept.
+  balances, in one transaction. An `ACCOUNT_CLOSED` transaction records any
+  balance removed. Their transactions and notifications remain stored in the
+  database, but notifications are no longer readable through the API.
 - Transaction records (history, audit, and a replay of a deleted account) have
   three new fields, `transferId`, `fromAccountId`, and `toAccountId`, which are
-  `null` for deposits and withdrawals, and `type` can also be `TRANSFER_OUT` or
-  `TRANSFER_IN`.
+  `null` for deposits and withdrawals, and `type` can also be `TRANSFER_OUT`,
+  `TRANSFER_IN`, or `ACCOUNT_CLOSED`.
 - New: `POST /api/transfers`, `GET /api/accounts/premium`, and the
   `CORS_ALLOWED_ORIGINS` setting.
 
@@ -489,9 +491,13 @@ balance, history, and notifications untouched.
 Deleting a customer also deletes all their accounts in the same transaction,
 including accounts that still hold money, so no account is ever left without an
 owner. Deleting a single account requires a balance of exactly 0.00. Successful
-deletes return 204 with no body. **Transactions and notifications are kept**
-after their account or customer is deleted, and the audit still returns the
-transactions; the account's own `/accounts/{id}/transactions` route returns 404
+deletes return 204 with no body. A customer delete records an
+`ACCOUNT_CLOSED` transaction (amount = the balance removed, balance after 0.00)
+for each account with a non-zero balance. **Transactions and notifications remain
+stored** in the database after their account or customer is deleted, and the
+audit still returns the transactions; notifications are no longer readable
+through the API (the notifications endpoint returns 404 for a deleted customer).
+The account's own `/accounts/{id}/transactions` route returns 404
 once the account is gone. Deleted IDs are never reused.
 
 ## Current Architecture of the Branch
@@ -583,7 +589,7 @@ For a walkthrough, follow the [Swagger test steps](docs/swagger-testing.md), or
 import the [Postman collection](postman/Banking-App.postman_collection.json) and run
 it in its stored order. The collection creates a fresh email, captures IDs, and
 deletes its sample customer and accounts at the end (their transactions and
-notifications are kept by design). Its premium-accounts check uses a low
+notifications remain stored by design). Its premium-accounts check uses a low
 threshold, so on a database with many other accounts it only checks the order. Its search and notification checks assume the
 default thresholds.
 

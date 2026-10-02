@@ -76,7 +76,7 @@ def test_postman_collection_workflow(client):
                 (variables["accountId"], "50.00"), (variables["secondAccountId"], "25.00")]
         elif name == "Audit After Deletion":
             assert [t["type"] for t in data["items"]] == ["DEPOSIT", "WITHDRAW", "TRANSFER_OUT", "TRANSFER_IN",
-                                                          "WITHDRAW"]
+                                                          "WITHDRAW", "ACCOUNT_CLOSED"]
             assert {t["accountId"] for t in data["items"]} == {variables["accountId"], variables["secondAccountId"]}
     names = [item["name"] for item in collection["item"]]
     assert len(names) == 31
