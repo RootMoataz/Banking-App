@@ -18,7 +18,8 @@ from .models import (Account, AccountCreate, AccountEdit, AmountRequest, AuditPa
                      TransferResult, User, UserCreate)
 from .money import MAX_CENTS, from_cents, to_cents
 from .notifications import messages
-from .repositories import AccountRepository, CustomerRepository, NotificationRepository, TransactionRepository
+from .repositories import (AccountRepository, CustomerRepository, NotificationRepository, TransactionRepository,
+                           UserRepository)
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,7 @@ class CustomerService:
         self.accounts = AccountRepository(db)
         self.transactions = TransactionRepository(db)
         self.notifications = NotificationRepository(db)
+        self.users = UserRepository(db)
 
     def _insert(self, data: UserCreate) -> dict:
         try:
@@ -150,6 +152,7 @@ class CustomerService:
             # Every account goes with its customer, whatever its balance; a closing record keeps the removed balance in
             # the ledger. Transactions and notifications stay for audit.
             self.accounts.delete_for(customer_oid, self.transactions, session)
+            self.users.delete_for_customer(customer_oid, session)  # their login ends with them
             self.customers.delete(customer_oid, session)
 
         _in_transaction(self.db, work)

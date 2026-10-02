@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError
 
+from conftest import offline_client
 from app.config import Settings
 from app.main import create_app
 from app.models import AccountCreate, AccountEdit, AmountRequest, UserCreate
@@ -78,7 +79,7 @@ def test_names_and_types_reject_control_characters(bad):
 
 
 def test_idempotency_key_rejects_leading_space():
-    client = TestClient(create_app(SETTINGS))  # no lifespan: validation fails before any handler runs
+    client = offline_client(SETTINGS)  # no lifespan: validation fails before any handler runs
     path = f"/api/accounts/{'a' * 24}/deposit"
     for key in (" leading", "  "):
         assert client.post(path, json={"amount": "1.00"}, headers={"Idempotency-Key": key}).status_code == 422
@@ -205,7 +206,7 @@ def test_list_limit_caps_the_cursor(repo_cls, method):
 @pytest.mark.parametrize("path", ["/api/customers", "/api/accounts", f"/api/accounts/{'a' * 24}/transactions"])
 @pytest.mark.parametrize("bad", ["0", "201", "-1", "abc"])
 def test_list_endpoints_reject_a_bad_limit(path, bad):
-    assert TestClient(create_app(SETTINGS)).get(path, params={"limit": bad}).status_code == 422
+    assert offline_client(SETTINGS).get(path, params={"limit": bad}).status_code == 422
 
 
 def test_limit_caps_lists_and_omitting_it_returns_everything(client):  # needs MongoDB

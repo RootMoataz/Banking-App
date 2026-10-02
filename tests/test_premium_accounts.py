@@ -36,6 +36,7 @@ def test_default_follows_configuration_not_a_constant(client, settings):
     for cents in (5_000, 60_000):
         account(client, owner, cents)
     with TestClient(create_app(replace(settings, premium_cents=50_000))) as configured:
+        configured.headers["Authorization"] = client.headers["Authorization"]  # same staff login, same database
         assert balances(premium(configured)) == ["600.00"]
     assert premium(client) == []  # the pinned 10000.00 default
 

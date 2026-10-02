@@ -8,6 +8,7 @@ from dotenv import dotenv_values
 
 from .money import to_cents
 
+MIN_JWT_SECRET_LENGTH = 32
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CORS_ORIGINS = "http://localhost:3000,http://localhost:5173"
 # What a browser sends as Origin: scheme, host and optional port, with no path or trailing slash.
@@ -21,6 +22,10 @@ class Settings:
     low_cents: int = 10_000
     premium_cents: int = 1_000_000
     cors_allowed_origins: tuple[str, ...] = tuple(DEFAULT_CORS_ORIGINS.split(","))
+    jwt_secret: str = field(default="", repr=False)  # checked at startup and by load_settings; never printed
+    jwt_expiration_minutes: int = 60
+    admin_email: str | None = None
+    admin_password: str | None = field(default=None, repr=False)
 
     def __post_init__(self):
         if not self.mongodb_db:
@@ -35,6 +40,12 @@ def _threshold(name: str, setting, default: str) -> int:
         return to_cents(Decimal(raw))
     except (InvalidOperation, ValueError):
         raise ValueError(f"{name} must be an amount from 0.00 to 99999999.99 with at most two decimals, got {raw!r}") from None
+
+
+def _expiration(raw: str) -> int:
+    if not raw.isascii() or not raw.isdecimal() or int(raw) < 1:
+        raise ValueError(f"JWT_EXPIRATION_MINUTES must be a whole number of minutes, 1 or more, got {raw!r}")
+    return int(raw)
 
 
 def _origins(raw: str) -> tuple[str, ...]:
@@ -60,10 +71,17 @@ def load_settings(env_file: Path = ROOT / ".env") -> Settings:
     uri = setting("MONGODB_URI")
     if not uri:
         raise RuntimeError("MONGODB_URI is not set")
+    secret = setting("JWT_SECRET")
+    if not secret or len(secret) < MIN_JWT_SECRET_LENGTH:
+        raise RuntimeError(f"JWT_SECRET must be set to at least {MIN_JWT_SECRET_LENGTH} characters")
     return Settings(
         uri,
         setting("MONGODB_DB", "paper_maker"),
         _threshold("LOW_BALANCE_THRESHOLD", setting, "100.00"),
         _threshold("PREMIUM_BALANCE_THRESHOLD", setting, "10000.00"),
         _origins(setting("CORS_ALLOWED_ORIGINS", DEFAULT_CORS_ORIGINS)),
+        secret,
+        _expiration(setting("JWT_EXPIRATION_MINUTES", "60")),
+        setting("ADMIN_EMAIL") or None,
+        setting("ADMIN_PASSWORD") or None,
     )

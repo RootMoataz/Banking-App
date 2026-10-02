@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError, OperationFailure
 
+from conftest import offline_client
 from app.config import Settings
 from app.db import ensure_indexes
 from app.main import create_app
@@ -95,7 +96,7 @@ def test_preferences_reject_extra_fields_and_accept_false():
     assert Preferences.model_validate({"marketingEnabled": False}).marketing_enabled is False
 
 
-OFFLINE = TestClient(create_app(DEFAULTS))  # no lifespan: these requests fail validation before any handler runs
+OFFLINE = offline_client(DEFAULTS)  # no lifespan: these requests fail validation before any handler runs
 
 
 @pytest.mark.parametrize("method, path, kwargs", [

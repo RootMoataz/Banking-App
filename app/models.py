@@ -4,7 +4,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, StrictBool, computed_field
+from pydantic import (AliasChoices, BaseModel, ConfigDict, EmailStr, Field, StrictBool, StringConstraints,
+                      computed_field, model_validator)
 from pydantic.alias_generators import to_camel
 
 
@@ -109,7 +110,7 @@ class TransferResult(Model):
     to_account_id: str
     amount: Decimal
     from_balance_after: Decimal
-    to_balance_after: Decimal
+    to_balance_after: Decimal | None = None  # hidden from a customer unless the destination is theirs
     date: datetime  # the TRANSFER_OUT record's date
 
 
@@ -143,3 +144,43 @@ class Notification(Model):
     message: str
     transaction_id: str
     created_at: datetime
+
+
+Role = Literal["ADMIN", "CUSTOMER"]
+
+
+class RegisterRequest(Model):
+    # Passwords are kept exactly as typed (spaces included), so stripping is off here and applied to the name only.
+    model_config = ConfigDict(str_strip_whitespace=False)
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100,
+                                           pattern=NO_CONTROL_CHARS)]
+    email: EmailStr = Field(max_length=100)
+    password: str = Field(max_length=200, description="8 to 72 UTF-8 bytes (bcrypt-style limit), not the email")
+
+    @model_validator(mode="after")
+    def _password_rules(self):
+        if not 8 <= len(self.password.encode()) <= 72:
+            raise ValueError("password must be 8 to 72 bytes long")
+        if self.password.lower() == str(self.email).lower():
+            raise ValueError("password must not be the email")
+        return self
+
+
+class LoginRequest(Model):
+    model_config = ConfigDict(str_strip_whitespace=False)
+    # Plain strings: a malformed email or odd password is a wrong login (401), not a validation hint.
+    email: str = Field(max_length=100)
+    password: str = Field(max_length=200)
+
+
+class AuthUser(Model):
+    email: str
+    role: Role
+    customer_id: str | None
+    name: str
+
+
+class TokenResponse(Model):
+    token: str
+    token_type: Literal["Bearer"] = "Bearer"
+    user: AuthUser

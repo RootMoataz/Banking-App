@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from app.config import ROOT
 from app.main import create_app
 from app.repositories import AccountRepository, CustomerRepository
+from conftest import ADMIN_EMAIL, ADMIN_PASSWORD
 from test_api import _hold
 
 MISSING = str(ObjectId())  # well-formed, but never stored
@@ -256,10 +257,18 @@ def test_duplicate_email_race_returns_409(client):
     assert len(client.get("/api/customers").json()) == 1
 
 
+def _log_in_as_bootstrapped_admin(test_client):
+    response = test_client.post("/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+    test_client.headers["Authorization"] = f"Bearer {response.json()['token']}"
+
+
 def test_data_persists_across_app_instances(settings):
-    with TestClient(create_app(settings)) as first:
+    with_admin = replace(settings, admin_email=ADMIN_EMAIL, admin_password=ADMIN_PASSWORD)
+    with TestClient(create_app(with_admin)) as first:
+        _log_in_as_bootstrapped_admin(first)
         created = customer(first)
-    with TestClient(create_app(settings)) as second:
+    with TestClient(create_app(with_admin)) as second:
+        _log_in_as_bootstrapped_admin(second)
         assert second.get(f"/api/customers/{created['customerId']}").json() == created
 
 
@@ -316,9 +325,11 @@ def test_rename_races_account_creation(client, monkeypatch):
 
 def test_app_creates_indexes_on_a_fresh_database(settings, db):
     """Email uniqueness must not depend on someone having run scripts/setup_indexes.py first."""
-    fresh = replace(settings, mongodb_db=f"paper_maker_test_{uuid.uuid4().hex[:8]}")
+    fresh = replace(settings, mongodb_db=f"paper_maker_test_{uuid.uuid4().hex[:8]}",
+                    admin_email=ADMIN_EMAIL, admin_password=ADMIN_PASSWORD)
     try:
         with TestClient(create_app(fresh)) as fresh_client:
+            _log_in_as_bootstrapped_admin(fresh_client)
             body = {"name": "Moataz Hikal", "email": "fresh@example.com"}
             assert fresh_client.post("/api/customers", json=body).status_code == 201
             assert fresh_client.post("/api/customers", json=body).status_code == 409

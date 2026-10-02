@@ -36,14 +36,15 @@ def test_preflight_from_another_origin_gets_no_cors_header():
     response = preflight(client, "http://evil.example")
     assert response.status_code == 400
     assert "access-control-allow-origin" not in response.headers
-    assert preflight(client, ALLOWED, headers="authorization").status_code == 400  # only the two named headers
+    assert preflight(client, ALLOWED, headers="authorization").status_code == 200  # the bearer token is allowed
+    assert preflight(client, ALLOWED, headers="x-other").status_code == 400  # only the named headers
 
 
 def test_simple_request_headers():
     client = TestClient(create_app(SETTINGS))
-    # A malformed ID fails validation before any handler runs, so no database is needed.
+    # No token: authentication fails before any handler runs, so no database is needed.
     allowed = client.get("/api/accounts/abc", headers={"Origin": ALLOWED})
-    assert (allowed.status_code, allowed.headers["access-control-allow-origin"]) == (422, ALLOWED)
+    assert (allowed.status_code, allowed.headers["access-control-allow-origin"]) == (401, ALLOWED)
     other = client.get("/api/accounts/abc", headers={"Origin": "http://evil.example"})
     assert "access-control-allow-origin" not in other.headers
 

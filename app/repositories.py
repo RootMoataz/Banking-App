@@ -14,15 +14,39 @@ def _now() -> datetime:
     return now.replace(microsecond=now.microsecond // 1000 * 1000)
 
 
+class UserRepository:
+    """Login accounts. An ADMIN has no customer; a CUSTOMER is linked to exactly one customer record."""
+
+    def __init__(self, db: Database):
+        self.collection = db.users
+
+    def insert(self, email: str, password_hash: str, role: str, customer_oid: ObjectId | None, name: str,
+               session: ClientSession | None = None) -> dict:
+        # The unique emailKey index rejects a second login with the same email in any letter case.
+        user = {"email": email, "emailKey": email.lower(), "passwordHash": password_hash, "role": role,
+                "customerId": customer_oid, "name": name, "disabled": False, "createdAt": _now()}
+        self.collection.insert_one(user, session=session)
+        return user
+
+    def get(self, oid: ObjectId) -> dict | None:
+        return self.collection.find_one({"_id": oid})
+
+    def by_email(self, email: str) -> dict | None:
+        return self.collection.find_one({"emailKey": email.lower()})
+
+    def delete_for_customer(self, customer_oid: ObjectId, session: ClientSession) -> None:
+        self.collection.delete_many({"customerId": customer_oid}, session=session)
+
+
 class CustomerRepository:
     def __init__(self, db: Database):
         self.collection = db.customers
 
-    def insert(self, name: str, email: str) -> dict:
+    def insert(self, name: str, email: str, session: ClientSession | None = None) -> dict:
         # The unique emailKey index rejects a second customer with the same email in any letter case.
         customer = {"name": name, "email": email, "emailKey": email.lower(), "createdAt": _now(),
                     "marketingEnabled": False}
-        self.collection.insert_one(customer)
+        self.collection.insert_one(customer, session=session)
         return customer
 
     def get(self, oid: ObjectId) -> dict | None:
