@@ -1,0 +1,39 @@
+:root { font-family: system-ui, sans-serif; color: #1f2937; background: #f6f7f9; font-synthesis: none; line-height: 1.5; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.container { max-width: 1120px; margin: auto; padding: 1.5rem; }
+header { background: #fff; border-bottom: 1px solid #d4d9e1; }
+header .container, .heading, .actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+header .container, .heading { justify-content: space-between; }
+.brand { font-size: 1.25rem; font-weight: 700; margin: 0; }
+a { color: #174a91; }
+h1 { margin-bottom: .25rem; }
+h2 { font-size: 1.25rem; margin-top: 0; }
+.heading p { margin-top: 0; }
+button, input { font: inherit; border-radius: 5px; }
+button { cursor: pointer; background: #174a91; color: white; border: 1px solid #174a91; padding: .6rem .9rem; }
+button:hover { filter: brightness(.92); }
+button:disabled { cursor: not-allowed; opacity: .55; }
+.secondary { background: white; color: #24354b; border-color: #a3adba; }
+.danger { background: #a51c26; border-color: #a51c26; }
+.danger-text { color: #a51c26; }
+:focus-visible { outline: 3px solid #2574d4; outline-offset: 3px; }
+.panel, .table-scroll { background: white; border: 1px solid #d4d9e1; border-radius: 8px; margin: 1rem 0; }
+.panel { padding: 1.5rem; }
+fieldset { border: 0; padding: 0; margin: 0; max-width: 480px; }
+label { display: block; font-weight: 600; margin-bottom: .35rem; }
+input { width: 100%; border: 1px solid #8591a1; padding: .65rem; margin-bottom: 1rem; }
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; text-align: left; }
+caption { text-align: left; padding: 1rem; color: #536174; }
+th, td { padding: 1rem; border-top: 1px solid #e1e5eb; overflow-wrap: anywhere; }
+thead { background: #f0f3f7; }
+.identifier { font-family: monospace; font-size: .85rem; }
+td .actions { flex-wrap: nowrap; gap: .5rem; }
+.error { color: #991b1b; background: #fff0f0; padding: 1rem; border-radius: 5px; }
+dialog { border: 1px solid #a3adba; border-radius: 8px; padding: 1.5rem; max-width: 520px; width: calc(100% - 2rem); }
+dialog::backdrop { background: #17223399; }
+footer { color: #536174; font-size: .9rem; }
+.skip-link { position: absolute; left: 1rem; top: -5rem; background: white; padding: .5rem; }
+.skip-link:focus { top: 1rem; }
+@media (max-width: 600px) { .container { padding: 1rem; } th, td { padding: .65rem; } .heading { align-items: flex-start; } }
