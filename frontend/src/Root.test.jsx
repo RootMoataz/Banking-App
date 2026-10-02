@@ -1,7 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import Root from './Root';
+
+const landingHeading = { level: 1, name: /every deposit, transfer and rule/i };
 
 const KEY = 'paper-maker-token';
 const admin = { email: 'boss@example.com', role: 'ADMIN', customerId: null, name: 'Boss' };
@@ -32,7 +34,48 @@ it('sends unauthenticated visitors to the login page', async () => {
   expect(window.location.pathname).toBe('/login');
 });
 
+it('shows the landing page at / to logged-out visitors', async () => {
+  render(<Root />);
+  expect(await screen.findByRole('heading', landingHeading)).toBeInTheDocument();
+  expect(window.location.pathname).toBe('/');
+  expect(calls.every(c => c.path === '/auth/me')).toBe(true);
+});
+
+it('sends unknown paths to the landing page', async () => {
+  window.history.replaceState(null, '', '/nowhere');
+  render(<Root />);
+  expect(await screen.findByRole('heading', landingHeading)).toBeInTheDocument();
+  expect(window.location.pathname).toBe('/');
+});
+
+it('navigates from the landing page to login and register', async () => {
+  const user = userEvent.setup();
+  render(<Root />);
+  await user.click(within(await screen.findByRole('main')).getAllByRole('link', { name: 'Sign in' })[0]);
+  expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+  expect(window.location.pathname).toBe('/login');
+  await user.click(screen.getByRole('link', { name: 'Create an account' }));
+  expect(await screen.findByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
+});
+
+it('never shows the landing page to a signed-in admin', async () => {
+  signedIn(admin, { 'GET /customers': () => reply([]) });
+  render(<Root />);
+  expect(await screen.findByRole('heading', { name: 'Customers' })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', landingHeading)).toBeNull();
+  expect(window.location.pathname).toBe('/');
+});
+
+it('sends a signed-in customer from / to My accounts', async () => {
+  signedIn(ada, { 'GET /customers/c1/accounts': () => reply([acct]) });
+  render(<Root />);
+  expect(await screen.findByRole('heading', { name: 'My accounts' })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', landingHeading)).toBeNull();
+  expect(window.location.pathname).toBe('/accounts');
+});
+
 it('logs in, stores the token and shows the admin screens', async () => {
+  window.history.replaceState(null, '', '/login');
   routes['POST /auth/login'] = () => reply({ token: 'jwt-1', tokenType: 'Bearer', user: admin });
   routes['GET /customers'] = () => reply([]);
   const user = userEvent.setup();
@@ -47,6 +90,7 @@ it('logs in, stores the token and shows the admin screens', async () => {
 });
 
 it('shows the generic login error inline and keeps the user signed out', async () => {
+  window.history.replaceState(null, '', '/login');
   routes['POST /auth/login'] = () => reply({ detail: 'Invalid email or password' }, 401);
   const user = userEvent.setup();
   render(<Root />);
@@ -155,12 +199,11 @@ it('shows access denied to a customer on an admin route, and to an admin on a cu
   expect(screen.getByRole('navigation')).toHaveTextContent('Premium accounts');
 });
 
-it('clears the token and returns to login on any 401', async () => {
+it('clears the token and leaves the signed-in screens on any 401', async () => {
   signedIn(admin, { 'GET /customers': () => reply({ detail: 'Not authenticated' }, 401) });
   render(<Root />);
-  expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', landingHeading)).toBeInTheDocument();
   expect(sessionStorage.getItem(KEY)).toBeNull();
-  expect(window.location.pathname).toBe('/login');
 });
 
 it('signs out', async () => {
@@ -168,6 +211,6 @@ it('signs out', async () => {
   const user = userEvent.setup();
   render(<Root />);
   await user.click(await screen.findByRole('button', { name: 'Sign out' }));
-  expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', landingHeading)).toBeInTheDocument();
   expect(sessionStorage.getItem(KEY)).toBeNull();
 });
