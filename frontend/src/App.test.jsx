@@ -41,6 +41,16 @@ it('edits a customer with PUT and both fields', async () => {
   expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining(ada.customerId), expect.objectContaining({ method: 'PUT', body: JSON.stringify({ name: 'Ada Byron', email: ada.email }) }));
 });
 
+it('disables customer actions while the edit form is open', async () => {
+  fetchMock.mockResolvedValueOnce(response([ada]));
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(await screen.findByRole('button', { name: `Edit ${ada.name}` }));
+  for (const name of ['Add customer', `Accounts for ${ada.name}`, `Delete ${ada.name}`, 'Premium accounts']) {
+    expect(screen.getByRole('button', { name })).toBeDisabled();
+  }
+});
+
 it('requires confirmation, supports cancel, and handles an empty 204 delete response', async () => {
   fetchMock.mockResolvedValueOnce(response([ada])).mockResolvedValueOnce({ ok: true, status: 204 });
   const user = userEvent.setup();

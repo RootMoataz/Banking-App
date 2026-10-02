@@ -39,6 +39,14 @@ it('deposits decimal strings with an idempotency key and refreshes balances', as
   expect(requests.filter(item => item.url.endsWith('/customers/c1/accounts')).length).toBe(2);
 });
 
+it('titles a completed withdrawal and its form heading', async () => {
+  const user = await openAction('Withdraw');
+  expect(screen.getByRole('heading', { name: 'Withdrawal · a1' })).toBeInTheDocument();
+  await user.type(screen.getByLabelText('Amount'), '5');
+  await user.click(screen.getByRole('button', { name: 'Submit withdrawal' }));
+  await screen.findByText('Withdrawal completed.');
+});
+
 it('preserves the withdrawal form when funds are insufficient', async () => {
   const user = await openAction('Withdraw');
   failure = { status: 400, message: 'Insufficient funds' };
