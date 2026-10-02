@@ -88,6 +88,10 @@ The repository has no `.env.example`. Create a `.env` file in the project root
 ```dotenv
 MONGODB_URI=mongodb+srv://USERNAME:PASSWORD@YOUR-CLUSTER.mongodb.net/?retryWrites=true&w=majority
 MONGODB_DB=paper_maker
+JWT_SECRET=AT-LEAST-32-RANDOM-CHARACTERS
+# JWT_EXPIRATION_MINUTES=60
+# ADMIN_EMAIL=staff@example.com
+# ADMIN_PASSWORD=A-STRONG-PASSWORD
 # LOW_BALANCE_THRESHOLD=100.00
 # PREMIUM_BALANCE_THRESHOLD=10000.00
 # CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
@@ -95,7 +99,12 @@ MONGODB_DB=paper_maker
 
 `.env` is ignored by Git. Never paste a working connection string into the
 README, Postman, or a commit, and URL-encode a password that contains reserved
-characters. Only `MONGODB_URI` is required. The commented lines show the
+characters. Only `MONGODB_URI` and `JWT_SECRET` (32 characters or more, no
+default; startup fails without it) are required. If `ADMIN_EMAIL` and
+`ADMIN_PASSWORD` are both set, startup creates that staff (ADMIN) login unless the
+email already has one (a warning is logged if that email belongs to a customer);
+`ADMIN_PASSWORD` must be at least 12 characters or startup fails; the password is
+never logged. The commented lines show the
 defaults: delete the `#` to change one, or leave the line out (never empty) to
 keep the default. An empty or invalid value stops startup.
 
@@ -135,7 +144,7 @@ standalone local MongoDB server does not. Only Atlas was used and tested here.
 
 The default origins let a browser frontend on `localhost:3000` or `localhost:5173`
 call the API. Any method is allowed, along with the `Content-Type` and
-`Idempotency-Key` request headers; no cookies or credentials are used. A request
+`Idempotency-Key` and `Authorization` request headers; no cookies or credentials are used. A request
 from any other origin gets no CORS headers, so the browser blocks it. Postman and
 curl are not affected.
 
@@ -199,12 +208,18 @@ string with two decimal places, which keeps values such as `0.10 + 0.20` exact.
 
 ## The API at a glance
 
-All paths start with `/api`. A malformed ID returns 422, and a well-formed ID
+All paths start with `/api`. Everything except `/auth/register`, `/auth/login` and
+`/public/health` needs `Authorization: Bearer <token>`; a missing, invalid or
+expired token returns 401 (see [Login and roles](#login-and-roles)). A malformed ID returns 422, and a well-formed ID
 that does not exist returns 404 (the audit filters return an empty result
 instead).
 
 | Method | Path | Purpose | Success |
 | --- | --- | --- | --- |
+| POST | `/auth/register` | Register: creates a customer and a CUSTOMER login, returns a token | 201 |
+| POST | `/auth/login` | Log in with email and password, returns a token | 200 |
+| GET | `/auth/me` | The logged-in user: `email`, `role`, `customerId`, `name` | 200 |
+| GET | `/public/health` | Public liveness check | 200 |
 | GET / POST | `/customers` | List or create customers | 200 / 201 |
 | GET | `/customers/search` | Search by name, email, category, or total balance | 200 |
 | GET / PUT / DELETE | `/customers/{id}` | Read, replace, or delete a customer and their accounts | 200 / 200 / 204 |
@@ -226,6 +241,21 @@ must be valid and unique, ignoring case). PUT account accepts only
 `{"accountType": "CURRENT"}` (a nonblank string up to 50 characters). Ownership
 and balance cannot be edited. Editing a customer's name also updates the name
 shown on their accounts. Extra or missing fields return 422.
+
+### Login and roles
+
+Tokens are HS256 JWTs (`sub` = user id, `exp` after `JWT_EXPIRATION_MINUTES`, 60 by
+default). Passwords are 8 to 72 bytes, must differ from the email, and are stored as
+salted scrypt hashes. The email is the username, case-insensitive; a duplicate
+returns 409. A wrong email and a wrong password return the same 401. Every request
+reloads the user from the database, so a deleted or disabled user, or a changed
+role, takes effect at once. Registration always creates a CUSTOMER.
+
+- **ADMIN** (staff): every endpoint in the table above.
+- **CUSTOMER**: their own customer record, accounts and notifications, opening an
+  account for themself, and transfers from their own accounts. Another customer's
+  object returns 404 (as if it did not exist); anything else, such as listing or
+  searching customers, deposits, withdrawals, premium, audit, or deleting, returns 403.
 
 ### Limits and pagination
 
@@ -295,7 +325,10 @@ The source history gets a `TRANSFER_OUT` record and the destination a
 `TRANSFER_IN` record. Both carry the shared `transferId`, `fromAccountId`, and
 `toAccountId`; each has its own `txnId`, the `customerId` of its account's owner,
 and the `balanceAfter` of its own account. `date` in the response is the
-`TRANSFER_OUT` record's date.
+`TRANSFER_OUT` record's date. `toBalanceAfter` is `null` for a customer who
+transfers to an account that is not theirs (so a transfer cannot reveal a
+stranger's balance); staff, and customers moving money between their own
+accounts, always get both balances.
 
 | Situation | Result |
 | --- | --- |
@@ -479,6 +512,7 @@ flowchart TD
 | File | Responsibility |
 | --- | --- |
 | [`app/main.py`](app/main.py) | HTTP routes, response codes, CORS, and Swagger descriptions |
+| [`app/auth.py`](app/auth.py) | Password hashing, JWT issue/verify, registration, login, admin bootstrap |
 | [`app/models.py`](app/models.py) | Request validation and response fields |
 | [`app/services.py`](app/services.py) | Customer/account rules, transfers, idempotency, search, preferences, notifications, and audit |
 | [`app/repositories.py`](app/repositories.py) | MongoDB reads and writes for customers, accounts, transactions, and notifications |

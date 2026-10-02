@@ -4,12 +4,18 @@ from pathlib import Path
 import re
 from urllib.parse import quote
 
+from fastapi.testclient import TestClient
+
+from conftest import ADMIN_EMAIL, ADMIN_PASSWORD
+
 
 def test_postman_collection_workflow(client):
     path = Path(__file__).resolve().parents[1] / "postman/Banking-App.postman_collection.json"
     collection = json.loads(path.read_text(encoding="utf-8"))
     # Postman's pre-request scripts generate these two; the replay uses fixed values instead.
-    variables = {"baseUrl": "", "email": "collection@example.com", "idempotencyKey": "collection-deposit-1",
+    variables = {"baseUrl": "", "adminEmail": ADMIN_EMAIL, "adminPassword": ADMIN_PASSWORD,
+                 "customerEmail": "casey.collection@example.com", "customerPassword": "pw-collection-1",
+                 "email": "collection@example.com", "idempotencyKey": "collection-deposit-1",
                  "transferKey": "collection-transfer-1",
                  "emailQuery": quote("updated.collection@example.com", safe="")}  # what encodeURIComponent yields
     declared = {v["key"] for v in collection["variable"]}
@@ -18,11 +24,28 @@ def test_postman_collection_workflow(client):
     def substitute(value):
         return re.sub(r"\{\{(\w+)\}\}", lambda m: str(variables[m[1]]), value)
 
-    for item in collection["item"]:
+    def flatten(items):
+        for entry in items:
+            yield from flatten(entry["item"]) if "item" in entry else [entry]
+
+    # Collection-level Bearer {{token}}; a request may override it or switch auth off.
+    assert collection["auth"]["bearer"][0]["value"] == "{{token}}"
+    requests = list(flatten(collection["item"]))
+    assert [i["name"] for i in collection["item"][0]["item"]] == ["Health", "Register", "Login", "Me"]
+
+    def authorization(request):
+        auth = request.get("auth", collection["auth"])
+        if auth["type"] == "noauth":
+            return {}
+        return {"Authorization": "Bearer " + variables[re.fullmatch(r"\{\{(\w+)\}\}", auth["bearer"][0]["value"])[1]]}
+
+    anonymous = TestClient(client.app)  # carries no default token: the collection decides what each request sends
+    for item in requests:
         request = item["request"]
         body = json.loads(substitute(request["body"]["raw"])) if "body" in request else None
         headers = {h["key"]: substitute(h["value"]) for h in request["header"]}
-        response = client.request(request["method"], substitute(request["url"]), json=body, headers=headers)
+        headers.update(authorization(request))
+        response = anonymous.request(request["method"], substitute(request["url"]), json=body, headers=headers)
         tests = next(e["script"]["exec"] for e in item["event"] if e["listen"] == "test")
         expected = int(re.search(r"status\((\d+)\)", tests[0])[1])
         assert response.status_code == expected, (item["name"], response.text)
@@ -30,7 +53,29 @@ def test_postman_collection_workflow(client):
             assert response.content == b""
         data = response.json() if response.content else None
         name = item["name"]
-        if name == "Create Customer":
+        if name == "Health":
+            assert data == {"status": "ok"}
+        elif name == "Register":
+            assert data["tokenType"] == "Bearer" and data["user"]["role"] == "CUSTOMER"
+            assert data["user"]["email"] == variables["customerEmail"]
+            variables["token"] = variables["customerToken"] = data["token"]
+            variables["customerSelfId"] = data["user"]["customerId"]
+        elif name == "Login":
+            assert data["user"]["role"] == "ADMIN" and data["user"]["customerId"] is None
+            variables["token"] = variables["adminToken"] = data["token"]
+        elif name == "Me":
+            assert data == {"email": ADMIN_EMAIL, "role": "ADMIN", "customerId": None, "name": "Administrator"}
+        elif name == "Customer: Create Account":
+            assert data["customerId"] == variables["customerSelfId"]
+            variables["customerAccountId"] = data["accountId"]
+        elif name == "Customer: Create Second Account":
+            variables["customerSecondAccountId"] = data["accountId"]
+        elif name == "Customer: Transfer From Own Account":
+            assert (data["fromBalanceAfter"], data["toBalanceAfter"]) == ("40.00", "10.00")
+            mine = client.get(f"/api/accounts/{variables['customerAccountId']}",
+                              headers={"Authorization": "Bearer " + variables["customerToken"]})
+            assert mine.json()["balance"] == "40.00"
+        elif name == "Create Customer":
             variables["customerId"] = data["customerId"]
             assert re.fullmatch(r"[0-9a-f]{24}", data["customerId"])
         elif name == "Edit Customer":
@@ -78,8 +123,11 @@ def test_postman_collection_workflow(client):
             assert [t["type"] for t in data["items"]] == ["DEPOSIT", "WITHDRAW", "TRANSFER_OUT", "TRANSFER_IN",
                                                           "WITHDRAW", "ACCOUNT_CLOSED"]
             assert {t["accountId"] for t in data["items"]} == {variables["accountId"], variables["secondAccountId"]}
-    names = [item["name"] for item in collection["item"]]
-    assert len(names) == 31
+    names = [item["name"] for item in requests]
+    assert len(names) == 31 + 4 + 6  # 31 admin workflow requests, 4 in Auth, 6 in Customer role
+    assert variables["token"] == variables["adminToken"] != variables["customerToken"]
+    assert [n for n in names if n.startswith("Customer: ") and "rejected" in n] == [
+        "Customer: GetAllCustomers rejected", "Customer: Deposit rejected"]
     for required in ("Retry Deposit (same Idempotency-Key)", "Search Customers", "Opt In To Marketing",
                      "Get Notifications", "Audit First Page", "Audit Next Page", "Transfer Between Accounts",
                      "Retry Transfer (same Idempotency-Key)", "Premium Accounts",
