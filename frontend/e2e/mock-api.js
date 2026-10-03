@@ -16,8 +16,8 @@ const accounts = [
   { accountId: 'acc-10020001', customerId: 'c-1002', userName: 'Ben Carter', accountType: 'Savings', balance: '250000.00', createdAt: '2026-09-13T09:00:00Z' },
 ];
 const transactions = [
-  { transactionId: 't-1', type: 'deposit', amount: '5000.00', balanceAfter: '5000.00', createdAt: '2026-09-02T10:00:00Z' },
-  { transactionId: 't-2', type: 'withdraw', amount: '250.00', balanceAfter: '4750.00', createdAt: '2026-09-05T10:00:00Z' },
+  { txnId: 't-1', type: 'DEPOSIT', amount: '5000.00', balanceAfter: '5000.00', date: '2026-09-02T10:00:00Z' },
+  { txnId: 't-2', type: 'WITHDRAW', amount: '250.00', balanceAfter: '4750.00', date: '2026-09-05T10:00:00Z' },
 ];
 
 const json = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });

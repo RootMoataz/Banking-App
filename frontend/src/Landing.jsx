@@ -75,6 +75,11 @@ function Preview() {
   const short = checking < amount;
 
   return <div className="landing-preview">
+    <div className="landing-stack">
+    <div className="landing-fan" aria-hidden="true">
+      <div className="landing-bill landing-bill-a"><span className="landing-bill-rosette" /></div>
+      <div className="landing-bill landing-bill-b"><span className="landing-bill-rosette" /></div>
+    </div>
     <article className="landing-note" aria-label="Sample account preview">
       <div className="landing-note-top">
         <span className="landing-medallion"><img src={logo} alt="Paper Maker mascot, a top-hatted banker holding a fan of banknotes" /></span>
@@ -94,6 +99,7 @@ function Preview() {
       </div>
       <p className="landing-stamp" aria-hidden="true">Sample</p>
     </article>
+    </div>
     <div className="landing-controls" role="group" aria-label="Try the sample account">
       <div className="landing-amounts" role="group" aria-label="Amount">
         {AMOUNTS.map(value => <button key={value} type="button" aria-pressed={amount === value} onClick={() => setAmount(value)}>{fmt(value)}</button>)}
@@ -204,7 +210,7 @@ export default function Landing({ onNavigate }) {
 
       <section id="learning" className="landing-section landing-tint" aria-labelledby="learning-title">
         <div className="landing-wrap landing-learn">
-          <img src={logo} alt="" className="landing-seal" />
+          <span className="landing-seal-wrap"><img src={logo} alt="" className="landing-seal" /></span>
           <div>
             <h2 id="learning-title">A place to learn, and to break things</h2>
             <p>Register with any email, open a few accounts and try the transfers. Read the request, the response and the history. The point is to see how a banking system holds together.</p>

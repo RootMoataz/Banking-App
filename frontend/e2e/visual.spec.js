@@ -19,7 +19,8 @@ test('login', async ({ page }) => {
   await mockApi(page);
   await page.goto('/login');
   await page.getByRole('heading', { name: 'Sign in' }).waitFor();
-  await shot(page, 'login');
+  // On desktop only the form half is captured: the engraved panel beside it compresses poorly.
+  await shot(page, 'login', page.viewportSize().width > 900 ? { x: 640, width: 640 } : undefined);
 });
 
 test('admin customers', async ({ page }) => {
@@ -33,5 +34,5 @@ test('customer accounts', async ({ page }) => {
   await mockApi(page, customer);
   await page.goto('/accounts');
   await page.getByRole('table').waitFor();
-  await shot(page, 'customer-accounts');
+  await shot(page, 'customer-accounts', page.viewportSize().width > 900 ? { height: 560 } : undefined);
 });

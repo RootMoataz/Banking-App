@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from './auth';
 import logo from './assets/paper-maker-logo.webp';
-import { initials } from './ui';
+import { Icon, initials } from './ui';
 
+const navIcons = { Customers: 'users', 'Premium accounts': 'star', 'My accounts': 'wallet', Transfer: 'swap', Profile: 'person' };
 const roleLabel = { ADMIN: 'Administrator', CUSTOMER: 'Customer' };
 
 // Signed-in frame: top bar, left navigation (a sheet under 900px) and the page.
@@ -31,9 +32,9 @@ export default function Shell({ items, onSignOut, children }) {
     <div className="scrim" data-open={open} onClick={() => setOpen(false)} aria-hidden="true" />
     <nav id="primary-nav" ref={nav} aria-label="Main navigation" data-open={open}>
       <div className="nav-items">
-        {items.map(item => <button key={item.label} type="button" disabled={item.disabled} aria-current={item.current ? 'page' : undefined} onClick={() => { setOpen(false); item.onSelect(); }}>{item.label}</button>)}
+        {items.map(item => <button key={item.label} type="button" disabled={item.disabled} aria-current={item.current ? 'page' : undefined} onClick={() => { setOpen(false); item.onSelect(); }}><Icon name={navIcons[item.label] || 'star'} />{item.label}</button>)}
       </div>
-      {onSignOut && <button type="button" className="signout" onClick={onSignOut}>Sign out</button>}
+      {onSignOut && <button type="button" className="signout" onClick={onSignOut}><Icon name="out" />Sign out</button>}
     </nav>
     <div className="page">
       <main id="main">{children}</main>

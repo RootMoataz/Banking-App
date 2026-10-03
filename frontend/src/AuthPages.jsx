@@ -8,9 +8,15 @@ const passwordBytes = value => new TextEncoder().encode(value).length;
 
 function AuthShell({ title, children, footer }) {
   return <main id="main" className="auth">
-    <div className="auth-brand"><span className="brand-mark"><img src={logo} alt="" /></span><span className="brand-name">Paper Maker</span></div>
-    <section className="panel auth-card" aria-labelledby="auth-title"><h1 id="auth-title">{title}</h1>{children}</section>
-    <p className="auth-foot">{footer}</p>
+    <div className="auth-art">
+      <span className="brand-mark"><img src={logo} alt="" /></span>
+      <span className="brand-name">Paper Maker</span>
+      <p className="auth-tag">A learning bank. Every move is on the record, and no real money moves.</p>
+      <p className="auth-serial" aria-hidden="true">PM 0042 7719</p>
+    </div>
+    <div className="auth-side">
+      <section className="panel auth-card" aria-labelledby="auth-title"><h1 id="auth-title">{title}</h1>{children}<p className="auth-foot">{footer}</p></section>
+    </div>
   </main>;
 }
 

@@ -93,7 +93,7 @@ export default function App({ initialView, onSignOut }) {
   return <Shell items={navItems} onSignOut={onSignOut}>
       {accountView ? <Accounts key={accountView.customer?.customerId || "premium"} onNavigationLock={setAccountNavigationLocked} customer={accountView.customer} onBack={() => setAccountView(null)} /> : <>
       <div className="heading"><div><h1 id="customers">Customers</h1><p>Manage customer names and contact details.</p></div><div className="actions"><button ref={addButton} disabled={loading || Boolean(loadError) || actionsLocked} onClick={() => { actionButton.current = addButton.current; setError(''); setMessage(''); setForm({ customer: null }); }}>Add customer</button></div></div>
-      {!loading && !loadError && <Summary items={[['Customers on record', customers.length], ['Accept marketing', customers.filter(item => item.marketingEnabled === true).length]]} />}
+      {!loading && !loadError && <Summary items={[['Customers on record', customers.length, 'lead'], ['Accept marketing', customers.filter(item => item.marketingEnabled === true).length]]} />}
       <p role="status">{message}</p>
       {loading ? <Loading label="Loading customers…" rows={5} /> : loadError ? <div className="panel"><p role="alert" className="error">{loadError}</p><button onClick={() => setReload(value => value + 1)}>Retry</button></div> : <>
         {error && !deleting && <p role="alert" className="error">{error}</p>}

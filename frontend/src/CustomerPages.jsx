@@ -47,13 +47,13 @@ export function MyAccounts() {
     <div className="heading"><div><h1 ref={heading} tabIndex={-1}>My accounts</h1><p>Your accounts and their balances.</p></div><div className="actions">
       <button disabled={opening || state.loading || Boolean(state.error)} onClick={openForm}>Open account</button>
     </div></div>
-    {!state.loading && !state.error && state.items.length > 0 && <Summary items={[['Accounts held', state.items.length], ['Combined balance', money(state.items.reduce((sum, item) => sum + Number(item.balance), 0))]]} />}
+    {!state.loading && !state.error && state.items.length > 0 && <Summary items={[['Combined balance', money(state.items.reduce((sum, item) => sum + Number(item.balance), 0)), 'lead'], ['Accounts held', state.items.length]]} />}
     <p role="status">{message}</p>
     {opening && <OpenAccount customerId={user.customerId} onCancel={() => closeForm(false)} onDone={() => { closeForm(true); setMessage('Account opened.'); setRevision(value => value + 1); }} />}
     <ListStatus state={state} />
     {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No accounts yet." hint="Open an account to begin your ledger." action={{ label: 'Open your first account', onClick: openForm, disabled: opening }} /> : <table className="cards"><caption>My accounts</caption><thead><tr><th scope="col">Account ID</th><th scope="col">Type</th><th scope="col">Opened</th><th scope="col" className="money">Balance</th><th scope="col">Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
       <th scope="row" className="identifier c-id">{account.accountId}</th><td className="c-type" data-label="Type">{account.accountType}<span className="c-end">{endingIn(account.accountId)}</span></td><td className="c-opened" data-label="Opened">{shortDate(account.createdAt)}</td><td className="money c-bal" data-label="Balance">{money(account.balance)}</td>
-      <td className="c-act"><div className="actions account-actions"><button className="secondary" onClick={event => showHistory(account, event.currentTarget)}>History</button></div></td>
+      <td className="c-act"><div className="actions account-actions"><button className="secondary" aria-pressed={history?.accountId === account.accountId} onClick={event => showHistory(account, event.currentTarget)}>History</button></div></td>
     </tr>)}</tbody></table>)}
     {history && <History key={history.accountId} account={history} onClose={closeHistory} />}
   </>;

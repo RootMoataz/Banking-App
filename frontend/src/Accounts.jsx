@@ -4,6 +4,7 @@ import { Empty, Loading, Summary, dateTime, endingIn, money, shortDate } from '.
 
 export const amountPattern = '(?:0|[1-9][0-9]{0,7})(?:[.][0-9]{1,2})?';
 const flowOf = type => /^deposit/i.test(type) ? { sign: '+', className: 'credit' } : /^withdraw/i.test(type) ? { sign: '-', className: 'debit' } : { sign: '', className: '' };
+const isZero = balance => /^0(?:\.0+)?$/.test(String(balance));
 const labels = { deposit: 'deposit', withdraw: 'withdrawal', transfer: 'transfer' };
 
 export function useList(path, revision = 0) {
@@ -132,16 +133,16 @@ export default function Accounts({ customer, onBack, onNavigationLock }) {
       <button className="secondary" disabled={disabled || state.loading} onClick={state.retry}>Refresh accounts</button>
     </div></div>
     {!customer && <p className="loading-note">Up to 200 accounts meeting the server's premium balance threshold, highest balance first.</p>}
-    {!state.loading && !state.error && state.items.length > 0 && <Summary items={[[customer ? 'Accounts held' : 'Accounts listed', state.items.length], ['Combined balance', money(state.items.reduce((sum, item) => sum + Number(item.balance), 0))], ...(customer ? [] : [['Highest balance', money(Math.max(...state.items.map(item => Number(item.balance))))]])]} />}
+    {!state.loading && !state.error && state.items.length > 0 && <Summary items={[['Combined balance', money(state.items.reduce((sum, item) => sum + Number(item.balance), 0)), 'lead'], [customer ? 'Accounts held' : 'Accounts listed', state.items.length], ...(customer ? [] : [['Highest balance', money(Math.max(...state.items.map(item => Number(item.balance))))]])]} />}
     <p role="status">{message}</p>
     {operation && <Operation operation={operation} customer={customer} onBusy={setBusy} onCancel={() => closeOperation(false)} onSuccess={text => { closeOperation(true); setMessage(text); setRevision(value => value + 1); }} />}
     <ListStatus state={state} />
     {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No accounts found." hint={customer ? "Open an account to begin this customer's ledger." : 'No account currently meets the premium balance threshold.'} action={customer ? { label: 'Open the first account', onClick: event => begin('open', null, event.currentTarget), disabled } : { label: 'Back to customers', onClick: onBack, disabled }} /> : <table className="cards"><caption>{customer ? 'Customer accounts' : 'Premium accounts'}</caption><thead><tr><th scope="col">Account ID</th><th scope="col">Owner</th><th scope="col">Type</th><th scope="col">Opened</th><th scope="col" className="money">Balance</th><th scope="col">Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
       <th scope="row" className="identifier c-id">{account.accountId}</th><td className="c-type" data-label="Type">{account.accountType}<span className="c-end">{endingIn(account.accountId)}</span></td><td className="c-owner" data-label="Owner">{account.userName}</td><td className="c-opened" data-label="Opened">{shortDate(account.createdAt)}</td><td className="money c-bal" data-label="Balance">{money(account.balance)}</td><td className="c-act"><div className="actions account-actions">
         <button disabled={disabled} onClick={event => begin('deposit', account, event.currentTarget)}>Deposit</button><button disabled={disabled} onClick={event => begin('withdraw', account, event.currentTarget)}>Withdraw</button>
-        <button className="secondary" disabled={disabled} onClick={event => showHistory(account, event.currentTarget)}>History</button>
-        <button className="secondary danger-text" disabled={disabled || !/^0(?:\.0+)?$/.test(String(account.balance))} title="Only zero-balance accounts can be deleted" aria-label={`Delete account ${account.accountId}`} onClick={event => begin('delete', account, event.currentTarget)}>Delete</button>
-      </div></td>
+        <button className="secondary" aria-pressed={history?.accountId === account.accountId} disabled={disabled} onClick={event => showHistory(account, event.currentTarget)}>History</button>
+        <button className="secondary danger-text" disabled={disabled || !isZero(account.balance)} title="Only zero-balance accounts can be deleted" aria-label={`Delete account ${account.accountId}`} onClick={event => begin('delete', account, event.currentTarget)}>Delete</button>
+      </div>{!isZero(account.balance) && <p className="c-hint">Delete needs a zero balance.</p>}</td>
     </tr>)}</tbody></table>)}
     {history && <History key={history.accountId} account={history} onClose={closeHistory} onDeposit={() => begin('deposit', history, opener.current)} />}
   </>;
