@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './auth';
 import logo from './assets/paper-maker-logo.webp';
-import { SLOW_AFTER_MS } from './ui';
+import { DEMO_URL, SLOW_AFTER_MS } from './ui';
 
 const passwordRule = 'Use 8 to 72 characters.';
 const passwordBytes = value => new TextEncoder().encode(value).length;
@@ -79,6 +79,7 @@ export function Login({ onNavigate }) {
       <div className="actions"><button type="submit" disabled={locked}>{busy ? 'Signing in…' : 'Sign in'}</button></div>
       <p className="wake-note" aria-live="polite">{busy && slow ? 'Waking up the server, this can take a few seconds.' : ''}</p>
     </fieldset></form>
+    <p className="demo-note">Want to look around first? <a href={DEMO_URL} target="_blank" rel="noopener noreferrer">See the demo accounts<span className="sr-only"> (opens GitHub in a new tab)</span></a></p>
   </AuthShell>;
 }
 

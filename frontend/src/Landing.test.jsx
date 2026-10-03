@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import Landing from './Landing';
+import { DEMO_URL } from './ui';
 
 let onNavigate;
 beforeEach(() => { onNavigate = vi.fn(); vi.stubGlobal('fetch', vi.fn()); });
@@ -26,6 +27,21 @@ it('sends the call-to-action links to login and register without a page load', a
   expect(onNavigate).toHaveBeenLastCalledWith('/register');
   await user.click(within(screen.getByRole('banner')).getByRole('link', { name: 'Open an account' }));
   expect(onNavigate).toHaveBeenLastCalledWith('/register');
+});
+
+it('links "Try the demo" to the GitHub demo page in a new tab from the header, hero and learning section', () => {
+  render(<Landing onNavigate={onNavigate} />);
+  const links = screen.getAllByRole('link', { name: /^Try the demo/ });
+  expect(links).toHaveLength(3);
+  expect(within(screen.getByRole('banner')).getByRole('link', { name: /^Try the demo/ })).toBe(links[0]);
+  expect(main().getAllByRole('link', { name: /^Try the demo/ })).toHaveLength(2);
+  links.forEach(link => {
+    expect(link).toHaveAttribute('href', DEMO_URL);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link).toHaveAccessibleName('Try the demo (opens GitHub in a new tab)');
+  });
+  expect(DEMO_URL).toBe('https://github.com/RootMoataz/Paper-Maker-Banking-App/blob/5_auth-jwt-ui/DEMO.md');
 });
 
 it('updates the sample balance and activity, and never calls the API', async () => {

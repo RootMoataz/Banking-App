@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import Root from './Root';
+import { DEMO_URL } from './ui';
 
 const landingHeading = { level: 1, name: /every deposit, transfer and rule/i };
 
@@ -32,6 +33,11 @@ it('sends unauthenticated visitors to the login page', async () => {
   render(<Root />);
   expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
   expect(window.location.pathname).toBe('/login');
+  const demo = screen.getByRole('link', { name: /See the demo accounts/ });
+  expect(demo).toHaveAttribute('href', DEMO_URL);
+  expect(demo).toHaveAttribute('target', '_blank');
+  expect(demo).toHaveAttribute('rel', 'noopener noreferrer');
+  expect(demo).toHaveAccessibleName('See the demo accounts (opens GitHub in a new tab)');
 });
 
 it('shows the landing page at / to logged-out visitors', async () => {

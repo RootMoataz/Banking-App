@@ -25,6 +25,8 @@ export function Summary({ items }) {
 }
 
 export const SLOW_AFTER_MS = 2000;
+// Public page listing the demo accounts; opened in a new tab.
+export const DEMO_URL = 'https://github.com/RootMoataz/Paper-Maker-Banking-App/blob/5_auth-jwt-ui/DEMO.md';
 
 // Shown while a request is pending. After two seconds (a cold start) the note changes to say so.
 // The note sits in a polite live region and reserves two lines, so nothing below it moves.

@@ -234,6 +234,8 @@ table.cards td .actions button { min-height: 40px; padding: 6px 14px; font-size:
 .auth-card .actions button { width: 100%; }
 .auth-card .actions { margin-top: 8px; }
 .auth-foot { margin: 0; color: var(--muted); }
+.demo-note { margin: 16px 0 0; color: var(--muted); font-size: 14px; }
+.demo-note a { display: inline-block; padding: 12px 4px; margin: -12px -4px; }
 .auth-foot a { display: inline-block; padding: 12px 6px; margin: -12px -6px; }
 
 /* dialog */

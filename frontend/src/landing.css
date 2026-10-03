@@ -32,6 +32,9 @@ html:has(.landing) { scroll-behavior: smooth; }
 .landing-btn-solid:hover { background: var(--l-night); border-color: var(--l-night); }
 .landing-btn-line { background: transparent; color: var(--l-navy); border-color: var(--l-navy); }
 .landing-btn-line:hover { background: rgba(36,114,61,.1); }
+.landing-btn-demo { gap: 6px; background: rgba(201,162,75,.14); color: var(--l-navy); border-color: var(--l-gold); border-style: dashed; }
+.landing-btn-demo:hover { background: rgba(201,162,75,.26); }
+.landing-ext { font-size: 1.05em; line-height: 1; }
 .landing-btn-quiet { color: var(--l-navy); }
 .landing-btn-quiet:hover { background: rgba(36,114,61,.1); }
 

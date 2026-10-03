@@ -3,7 +3,7 @@ import '@fontsource/newsreader/latin-500.css';
 import '@fontsource/newsreader/latin-600.css';
 import './landing.css';
 import logo from './assets/paper-maker-logo.webp';
-import { money } from './ui';
+import { DEMO_URL, money } from './ui';
 
 // Public landing page. Pure presentation plus a client-side sample: no API calls.
 
@@ -52,6 +52,12 @@ const signed = cents => `${cents < 0 ? '-' : '+'}${fmt(Math.abs(cents))}`;
 
 function Link({ to, onNavigate, className, children }) {
   return <a className={className} href={to} onClick={event => { event.preventDefault(); onNavigate(to); }}>{children}</a>;
+}
+
+function DemoLink({ className = '' }) {
+  return <a className={`landing-btn landing-btn-demo ${className}`.trim()} href={DEMO_URL} target="_blank" rel="noopener noreferrer">
+    Try the demo<span className="landing-sr"> (opens GitHub in a new tab)</span><span aria-hidden="true" className="landing-ext">↗</span>
+  </a>;
 }
 
 function Preview() {
@@ -124,6 +130,7 @@ export default function Landing({ onNavigate }) {
         <nav id="landing-nav" aria-label="Primary" data-open={open}>
           <ul>
             {navLinks.map(([href, label]) => <li key={href}><a href={href} onClick={() => setOpen(false)}>{label}</a></li>)}
+            <li className="landing-nav-cta"><DemoLink /></li>
             <li className="landing-nav-cta"><Link to="/login" onNavigate={onNavigate} className="landing-btn landing-btn-quiet">Sign in</Link></li>
             <li className="landing-nav-cta"><Link to="/register" onNavigate={onNavigate} className="landing-btn landing-btn-solid">Open an account</Link></li>
           </ul>
@@ -140,6 +147,7 @@ export default function Landing({ onNavigate }) {
             <div className="landing-cta">
               <Link to="/register" onNavigate={onNavigate} className="landing-btn landing-btn-solid">Open an account</Link>
               <Link to="/login" onNavigate={onNavigate} className="landing-btn landing-btn-line">Sign in</Link>
+              <DemoLink />
             </div>
             <p className="landing-fine">An educational project. No real money moves.</p>
           </div>
@@ -203,6 +211,7 @@ export default function Landing({ onNavigate }) {
             <div className="landing-cta">
               <Link to="/register" onNavigate={onNavigate} className="landing-btn landing-btn-solid">Open an account</Link>
               <Link to="/login" onNavigate={onNavigate} className="landing-btn landing-btn-line">Sign in</Link>
+              <DemoLink />
             </div>
           </div>
         </div>
