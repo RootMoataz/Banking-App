@@ -290,6 +290,9 @@ table.cards td .actions button { min-height: 40px; padding: 6px 14px; font-size:
 .auth-card fieldset { max-width: none; }
 .auth-card .actions button { width: 100%; }
 .auth-card .actions { margin-top: 8px; }
+.name-row { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; }
+.name-row > div { min-width: 0; }
+@media (max-width: 520px) { .name-row { grid-template-columns: 1fr; } }
 .auth-foot { margin: 28px 0 0; padding-top: 18px; border-top: 1px dashed var(--line-strong); color: var(--muted); }
 .demo-note { margin: 16px 0 0; color: var(--muted); font-size: 14px; }
 .demo-note a { display: inline-block; padding: 12px 4px; margin: -12px -4px; }

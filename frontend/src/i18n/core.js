@@ -104,6 +104,12 @@ const ERROR_KEYS = {
   'Select an account type.': 'err.accountType',
   'Choose your account and a different destination account.': 'err.chooseOwnAndOther',
   'Use 8 to 72 characters.': 'auth.passwordRule',
+  'Enter your first name.': 'auth.firstNameRequired',
+  'Enter your last name.': 'auth.lastNameRequired',
+  'First name must be 50 characters or fewer.': 'auth.firstNameTooLong',
+  'Last name is too long. Use 50 characters or fewer, and no more than 100 for both names together.': 'auth.lastNameTooLong',
+  'First name cannot be only digits.': 'auth.firstNameInvalid',
+  'Last name cannot be only digits.': 'auth.lastNameInvalid',
   'The result is unknown. Check account balances and history before submitting again.': 'err.unknownResultAccounts',
   'The result is unknown. Check your balances and history before submitting again.': 'err.unknownResultOwn',
 };

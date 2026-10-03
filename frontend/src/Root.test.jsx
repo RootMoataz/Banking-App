@@ -114,7 +114,8 @@ it('registers a customer and lands on My accounts', async () => {
   const user = userEvent.setup();
   render(<Root />);
   expect(await screen.findByText(/8 to 72 characters/)).toBeInTheDocument();
-  await user.type(screen.getByLabelText('Name'), 'Ada Lovelace');
+  await user.type(screen.getByLabelText('First name'), 'Ada');
+  await user.type(screen.getByLabelText('Last name'), 'Lovelace');
   await user.type(screen.getByLabelText('Email'), 'ada@example.com');
   await user.type(screen.getByLabelText('Password'), 'longenough1');
   await user.click(screen.getByRole('button', { name: 'Create account' }));
@@ -126,12 +127,105 @@ it('rejects a short password before calling the server', async () => {
   window.history.replaceState(null, '', '/register');
   const user = userEvent.setup();
   render(<Root />);
-  await user.type(await screen.findByLabelText('Name'), 'Ada');
+  await user.type(await screen.findByLabelText('First name'), 'Ada');
+  await user.type(screen.getByLabelText('Last name'), 'Lovelace');
   await user.type(screen.getByLabelText('Email'), 'ada@example.com');
   await user.type(screen.getByLabelText('Password'), 'short');
   await user.click(screen.getByRole('button', { name: 'Create account' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('8 to 72');
   expect(calls.some(c => c.path === '/auth/register')).toBe(false);
+});
+
+const registerCreate = () => { routes['POST /auth/register'] = () => reply({ token: 'jwt-2', tokenType: 'Bearer', user: ada }, 201); routes['GET /customers/c1/accounts'] = () => reply([]); };
+const registerBody = () => JSON.parse(calls.find(c => c.path === '/auth/register').body);
+
+it('gives the register name fields the right autocomplete hints', async () => {
+  window.history.replaceState(null, '', '/register');
+  render(<Root />);
+  const first = await screen.findByLabelText('First name');
+  const last = screen.getByLabelText('Last name');
+  expect(first).toHaveAttribute('autocomplete', 'given-name');
+  expect(last).toHaveAttribute('autocomplete', 'family-name');
+  expect(first).toHaveAttribute('aria-required', 'true');
+  expect(last).toHaveAttribute('aria-required', 'true');
+});
+
+it('requires both register names, with the message in an alert and focus on the field', async () => {
+  window.history.replaceState(null, '', '/register');
+  const user = userEvent.setup();
+  render(<Root />);
+  await user.type(await screen.findByLabelText('Last name'), 'Lovelace');
+  await user.type(screen.getByLabelText('Email'), 'ada@example.com');
+  await user.type(screen.getByLabelText('Password'), 'longenough1');
+  await user.click(screen.getByRole('button', { name: 'Create account' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Enter your first name.');
+  expect(screen.getByLabelText('First name')).toHaveFocus();
+  await user.type(screen.getByLabelText('First name'), 'Ada');
+  await user.clear(screen.getByLabelText('Last name'));
+  await user.type(screen.getByLabelText('Last name'), '   ');
+  await user.click(screen.getByRole('button', { name: 'Create account' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Enter your last name.');
+  expect(screen.getByLabelText('Last name')).toHaveFocus();
+  expect(calls.some(c => c.path === '/auth/register')).toBe(false);
+});
+
+it('rejects register names that are too long or only digits', async () => {
+  window.history.replaceState(null, '', '/register');
+  const user = userEvent.setup();
+  render(<Root />);
+  const first = await screen.findByLabelText('First name');
+  const last = screen.getByLabelText('Last name');
+  await user.type(screen.getByLabelText('Email'), 'ada@example.com');
+  await user.type(screen.getByLabelText('Password'), 'longenough1');
+  const submit = () => user.click(screen.getByRole('button', { name: 'Create account' }));
+  await user.type(first, 'A'.repeat(51));
+  await user.type(last, 'Lovelace');
+  await submit();
+  expect(await screen.findByRole('alert')).toHaveTextContent('First name must be 50 characters or fewer.');
+  await user.clear(first);
+  await user.type(first, '12345');
+  await submit();
+  expect(await screen.findByRole('alert')).toHaveTextContent('First name cannot be only digits.');
+  await user.clear(first);
+  await user.type(first, 'Ada');
+  await user.clear(last);
+  await user.type(last, 'L'.repeat(51));
+  await submit();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Last name is too long');
+  expect(calls.some(c => c.path === '/auth/register')).toBe(false);
+});
+
+it('sends first and last name as one trimmed, single-spaced name', async () => {
+  window.history.replaceState(null, '', '/register');
+  registerCreate();
+  const user = userEvent.setup();
+  render(<Root />);
+  await user.type(await screen.findByLabelText('First name'), '  Ada   Augusta ');
+  await user.type(screen.getByLabelText('Last name'), '  King-Noel  ');
+  await user.type(screen.getByLabelText('Email'), 'ada@example.com');
+  await user.type(screen.getByLabelText('Password'), 'longenough1');
+  await user.click(screen.getByRole('button', { name: 'Create account' }));
+  await screen.findByRole('heading', { name: 'My accounts' });
+  expect(registerBody().name).toBe('Ada Augusta King-Noel');
+});
+
+it('shows translated register labels and messages and still sends one name, in German', async () => {
+  localStorage.setItem('pm.lang', 'de');
+  window.history.replaceState(null, '', '/register');
+  registerCreate();
+  const user = userEvent.setup();
+  try {
+    render(<Root />);
+    await user.type(await screen.findByLabelText('Vorname'), 'Ada');
+    await user.type(screen.getByLabelText('E-Mail'), 'ada@example.com');
+    await user.type(screen.getByLabelText('Passwort'), 'longenough1');
+    await user.click(screen.getByRole('button', { name: 'Konto erstellen' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Geben Sie Ihren Nachnamen ein.');
+    await user.type(screen.getByLabelText('Nachname'), ' Lovelace ');
+    await user.click(screen.getByRole('button', { name: 'Konto erstellen' }));
+    await waitFor(() => expect(calls.some(c => c.path === '/auth/register')).toBe(true));
+    expect(registerBody().name).toBe('Ada Lovelace');
+  } finally { localStorage.removeItem('pm.lang'); }
 });
 
 it('loads identity from /auth/me and shows customer-only navigation', async () => {

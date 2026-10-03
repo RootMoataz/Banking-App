@@ -6,6 +6,7 @@ import { DEMO_ACCOUNTS, DEMO_PASSWORD } from './demo';
 import { DEMO_URL, SLOW_AFTER_MS } from './ui';
 
 const passwordRule = 'Use 8 to 72 characters.'; // English key text; shown translated through errorText
+const tidyName = value => value.trim().replace(/\s+/g, ' ');
 const passwordBytes = value => new TextEncoder().encode(value).length;
 
 function AuthShell({ title, children, footer, aside }) {
@@ -137,17 +138,42 @@ export function Login({ onNavigate }) {
 export function Register({ onNavigate }) {
   const { t, errorText } = useI18n();
   const { register } = useAuth();
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { busy, error, submit, slow, lock, unlock, locked } = useSubmit(() => register(name.trim(), email.trim(), password));
-  const validate = () => { const size = passwordBytes(password); return size < 8 || size > 72 ? passwordRule : ''; };
+  const [invalid, setInvalid] = useState('');
+  const firstRef = useRef(null);
+  const lastRef = useRef(null);
+  const { busy, error, submit, slow, lock, unlock, locked } = useSubmit(() => register(`${tidyName(firstName)} ${tidyName(lastName)}`, email.trim(), password));
+  // The API takes one name (max 100), so the two parts together must fit it.
+  const validate = () => {
+    const first = tidyName(firstName);
+    const last = tidyName(lastName);
+    const fail = (field, ref, message) => { setInvalid(field); ref.current?.focus(); return message; };
+    if (!first) return fail('first', firstRef, 'Enter your first name.');
+    if (first.length > 50) return fail('first', firstRef, 'First name must be 50 characters or fewer.');
+    if (/^\d+$/.test(first)) return fail('first', firstRef, 'First name cannot be only digits.');
+    if (!last) return fail('last', lastRef, 'Enter your last name.');
+    if (last.length > 50 || first.length + 1 + last.length > 100) return fail('last', lastRef, 'Last name is too long. Use 50 characters or fewer, and no more than 100 for both names together.');
+    if (/^\d+$/.test(last)) return fail('last', lastRef, 'Last name cannot be only digits.');
+    setInvalid('');
+    const size = passwordBytes(password); return size < 8 || size > 72 ? passwordRule : '';
+  };
   return <AuthShell title={t('auth.register.title')} footer={t('auth.register.foot', { link: pageLink('/login', t('auth.register.footLink'), onNavigate) })}>
     {error && <p role="alert" className="error">{errorText(error)}</p>}
     <Lockout lock={lock} onDone={unlock} />
     <form onSubmit={event => submit(event, validate)}><fieldset disabled={busy}>
-      <label htmlFor="name">{t('common.name')}</label>
-      <input id="name" autoFocus required maxLength={100} pattern=".*\S.*" autoComplete="name" value={name} onChange={event => setName(event.target.value)} />
+      <div className="name-row">
+        <div>
+          <label htmlFor="first-name">{t('auth.firstName')}</label>
+          <input id="first-name" ref={firstRef} autoFocus aria-required="true" aria-invalid={invalid === 'first' || undefined} autoComplete="given-name" value={firstName} onChange={event => setFirstName(event.target.value)} />
+        </div>
+        <div>
+          <label htmlFor="last-name">{t('auth.lastName')}</label>
+          <input id="last-name" ref={lastRef} aria-required="true" aria-invalid={invalid === 'last' || undefined} autoComplete="family-name" value={lastName} onChange={event => setLastName(event.target.value)} />
+        </div>
+      </div>
       <label htmlFor="email">{t('common.email')}</label>
       <input id="email" type="email" required maxLength={100} autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} />
       <label htmlFor="password">{t('common.password')}</label>
