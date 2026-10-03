@@ -32,14 +32,15 @@ html:has(.landing) { scroll-behavior: smooth; }
 .landing-btn-solid:hover { background: var(--l-night); border-color: var(--l-night); }
 .landing-btn-line { background: transparent; color: var(--l-navy); border-color: var(--l-navy); }
 .landing-btn-line:hover { background: rgba(36,114,61,.1); }
-.landing-btn-demo { gap: 6px; background: rgba(201,162,75,.14); color: var(--l-navy); border-color: var(--l-gold); border-style: dashed; }
-.landing-btn-demo:hover { background: rgba(201,162,75,.26); }
+.landing-btn-demo { gap: 6px; background: var(--brand-tint); color: var(--l-navy); border-color: var(--brand); border-style: dashed; }
+.landing-btn-demo:hover { background: #d3e9d8; }
 .landing-ext { font-size: 1.05em; line-height: 1; }
 .landing-btn-quiet { color: var(--l-navy); }
 .landing-btn-quiet:hover { background: rgba(36,114,61,.1); }
 
 /* header */
 .landing-header { position: sticky; top: 0; z-index: 40; background: rgba(243,248,243,.96); border-bottom: 1px solid var(--l-rule); backdrop-filter: blur(6px); }
+.landing-header nav a, .landing-header .landing-btn, .landing-brand { white-space: nowrap; }
 .landing-header-row { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; }
 .landing-brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--l-navy); font-family: var(--l-serif); font-weight: 600; font-size: 22px; letter-spacing: -.01em; }
 .landing-brand-mark { display: grid; place-items: center; width: 46px; height: 46px; }
@@ -166,13 +167,16 @@ html:has(.landing) { scroll-behavior: smooth; }
   .landing-hero-copy h1 { max-width: 16ch; }
   .landing-steps li:not(:last-child)::after { right: -12px; }
 }
-@media (max-width: 860px) {
+/* The header has eight items, so it needs the menu button well before the page itself gets narrow. */
+@media (max-width: 1180px) {
   .landing-menu { display: block; }
   .landing-header nav { display: none; position: absolute; left: 0; right: 0; top: 100%; background: var(--l-paper); border-bottom: 1px solid var(--l-rule); padding: 8px clamp(16px, 4vw, 40px) 20px; box-shadow: 0 18px 24px -18px rgba(2,36,20,.4); }
   .landing-header nav[data-open="true"] { display: block; }
   .landing-header nav ul { flex-direction: column; align-items: stretch; gap: 2px; }
   .landing-header nav a { width: 100%; }
   .landing-nav-cta:first-of-type { margin: 10px 0 0; }
+}
+@media (max-width: 860px) {
   .landing-ledger { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 720px) {
