@@ -15,9 +15,22 @@ Choose Accounts on a customer to list or open accounts, deposit, withdraw, view 
 
 Money is sent as a decimal string, with a fresh idempotency key for each submitted deposit, withdrawal, or transfer. There are no automatic mutation retries. After a connection failure, check balances and history before submitting a new operation. Successful operations reload the account list; if that reload fails, Retry only reloads the list.
 
+## Languages
+
+The UI is available in English, Arabic (right to left), French, Spanish and German. The dictionaries are `src/i18n/{en,ar,fr,es,de}.js`; English is the source and the fallback.
+
+- Add or change a string: add the key to `en.js`, then to the other four files (a test fails if a key is missing, extra, empty or has different `{placeholders}`). Use `const t = useT()` and `t('screen.key', { name })`. For plurals give `{ one: '...', other: '...' }` and pass `count`.
+- Add a language: create `src/i18n/xx.js` with every key, import it in `src/i18n/core.js` (`DICTIONARIES`, `LANGUAGES` with its own-language name, and `dirOf` if it is right to left), then add its locale to `NUMBER_LOCALES` and `DATE_LOCALES` in `src/ui.jsx`. Digits stay Western (`-u-nu-latn`).
+- Server error messages arrive in English; known ones are mapped in `ERROR_KEYS` in `core.js`. Unknown messages are shown as received.
+- The choice is stored in `localStorage` under `pm.lang`.
+- Use logical CSS properties only (see `DESIGN.md`).
+
 ```sh
 npm test
 npm run build
+npm run test:e2e   # set PM_E2E_PORT if another dev server already uses 5173
 ```
+
+`e2e/i18n.spec.js` writes review screenshots (Arabic, German and others) to `%TEMP%\papermaker-i18n`.
 
 Tests mock HTTP responses and cover customer CRUD and error recovery. They do not contact a database. The production build is written to `dist/`; configure the backend to allow the deployed frontend origin before deployment.

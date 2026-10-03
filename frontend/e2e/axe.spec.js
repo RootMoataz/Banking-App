@@ -29,6 +29,19 @@ const screens = [
   ['customer profile', customer, '/profile', page => page.getByRole('heading', { name: 'Profile' }).waitFor()],
 ];
 
+// The public pages again in Arabic (right to left) and German (longest words).
+for (const lang of ['ar', 'de']) {
+  for (const [name, path] of [['landing', '/'], ['login', '/login']]) {
+    test(`axe: ${name} in ${lang}`, async ({ page }) => {
+      await mockApi(page);
+      await page.addInitScript(code => localStorage.setItem('pm.lang', code), lang);
+      await page.goto(path);
+      await page.locator(`html[lang="${lang}"] h1`).first().waitFor();
+      await audit(page);
+    });
+  }
+}
+
 for (const [name, user, path, prepare] of screens) {
   test(`axe: ${name}`, async ({ page }) => {
     await mockApi(page, user);

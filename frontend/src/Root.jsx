@@ -4,12 +4,13 @@ import { Login, Register } from './AuthPages';
 import Landing from './Landing';
 import { AccessDenied, MyAccounts, Profile, Transfer } from './CustomerPages';
 import { AuthProvider, useAuth } from './auth';
+import { I18nProvider, useT } from './i18n';
 import Shell from './Shell';
 import { Loading } from './ui';
 
 const adminPaths = ['/', '/customers', '/premium'];
-const adminNav = [['/', 'Customers'], ['/premium', 'Premium accounts']];
-const customerNav = [['/accounts', 'My accounts'], ['/transfer', 'Transfer'], ['/profile', 'Profile']];
+const adminNav = [['/', 'customers', 'users'], ['/premium', 'premium', 'star']];
+const customerNav = [['/accounts', 'myAccounts', 'wallet'], ['/transfer', 'transfer', 'swap'], ['/profile', 'profile', 'person']];
 const customerPages = { '/accounts': MyAccounts, '/transfer': Transfer, '/profile': Profile };
 
 // Role guards are UX only; the server enforces access.
@@ -22,9 +23,10 @@ function resolve(path, user) {
   return user.role === 'ADMIN' ? '/' : '/accounts';
 }
 
-const navItems = (nav, current, navigate) => nav.map(([path, label]) => ({ label, current: current === path, onSelect: () => navigate(path) }));
+const navItems = (nav, current, navigate, t) => nav.map(([path, key, icon]) => ({ label: t(`nav.${key}`), icon, current: current === path, onSelect: () => navigate(path) }));
 
 function Routes() {
+  const t = useT();
   const { user, loading, logout } = useAuth();
   const [path, setPath] = useState(window.location.pathname);
   const navigate = (next, replace = false) => {
@@ -39,9 +41,9 @@ function Routes() {
   useEffect(() => { if (!loading && effective !== path) navigate(effective, true); });
   // A distinct document title per screen, so screen reader users hear where they are.
   useEffect(() => {
-    const names = { '/': user ? 'Customers' : 'Banking, made visible', '/customers': 'Customers', '/premium': 'Premium accounts', '/accounts': 'My accounts', '/transfer': 'Transfer', '/profile': 'Profile', '/login': 'Sign in', '/register': 'Create your account' };
-    document.title = `${names[effective] || 'Not available'} | Paper Maker`;
-  }, [effective, user]);
+    const names = { '/': user ? 'customers' : 'landing', '/customers': 'customers', '/premium': 'premium', '/accounts': 'myAccounts', '/transfer': 'transfer', '/profile': 'profile', '/login': 'signIn', '/register': 'register' };
+    document.title = `${t(`title.${names[effective] || 'notAvailable'}`)} | Paper Maker`;
+  }, [effective, user, t]);
   if (loading) return <main id="main" className="boot"><Loading /></main>;
   if (!user) {
     if (effective === '/register') return <Register onNavigate={navigate} />;
@@ -49,12 +51,12 @@ function Routes() {
   }
   if (user.role === 'ADMIN') {
     if (adminPaths.includes(effective)) return <App key={effective} initialView={effective === '/premium' ? 'premium' : undefined} onSignOut={logout} />;
-    return <Shell items={navItems(adminNav, effective, navigate)} onSignOut={logout}><AccessDenied /></Shell>;
+    return <Shell items={navItems(adminNav, effective, navigate, t)} onSignOut={logout}><AccessDenied /></Shell>;
   }
   const Page = customerPages[effective] || AccessDenied;
-  return <Shell items={navItems(customerNav, effective, navigate)} onSignOut={logout}><Page /></Shell>;
+  return <Shell items={navItems(customerNav, effective, navigate, t)} onSignOut={logout}><Page /></Shell>;
 }
 
 export default function Root() {
-  return <AuthProvider><Routes /></AuthProvider>;
+  return <I18nProvider><AuthProvider><Routes /></AuthProvider></I18nProvider>;
 }

@@ -1,34 +1,45 @@
 import { useEffect, useRef, useState } from 'react';
+import { getLang } from './i18n/core.js';
+import { useT } from './i18n';
+
+// Western digits (0-9) in every language, Arabic included: the locale tag and the options both ask for latn.
+// Separators and month names follow the language. The direction marks Intl puts around negative numbers are
+// removed; CSS lays amounts out left to right instead.
+const NUMBER_LOCALES = { en: 'en-US', ar: 'ar', fr: 'fr-FR', es: 'es-ES', de: 'de-DE' };
+const DATE_LOCALES = { en: 'en-GB', ar: 'ar', fr: 'fr-FR', es: 'es-ES', de: 'de-DE' };
+const latin = tag => `${tag}-u-nu-latn`;
+const MARKS = /[‎‏؜]/g;
 
 // Amounts: no currency symbol, thousands separators, always two decimals, a plain minus for negatives.
 // Unparseable values show an em dash rather than "NaN".
-export const money = value => {
+export const money = (value, lang = getLang()) => {
   const number = Number(value);
   return value === null || value === undefined || value === '' || !Number.isFinite(number) ? '—'
-    : number.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    : number.toLocaleString(latin(NUMBER_LOCALES[lang]), { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always', numberingSystem: 'latn' }).replace(MARKS, '');
 };
+export const decimalSeparator = (lang = getLang()) => new Intl.NumberFormat(latin(NUMBER_LOCALES[lang]), { numberingSystem: 'latn' }).formatToParts(1.1).find(part => part.type === 'decimal')?.value ?? '.';
 
-// Dates: "2 Oct 2026"; date and time: "2 Oct 2026, 14:05". Both in the viewer's time zone, 24-hour clock.
+// Dates: "2 Oct 2026"; date and time: "2 Oct 2026, 14:05". Both in the viewer's time zone, 24-hour clock, month names in the language.
 const validDate = value => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.getTime()) ? date : null; };
-export const shortDate = value => validDate(value)?.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) ?? '';
-export const dateTime = value => validDate(value)?.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) ?? '';
+const dateOptions = { day: 'numeric', month: 'short', year: 'numeric', numberingSystem: 'latn', calendar: 'gregory' };
+export const shortDate = (value, lang = getLang()) => validDate(value)?.toLocaleDateString(latin(DATE_LOCALES[lang]), dateOptions).replace(MARKS, '') ?? '';
+export const dateTime = (value, lang = getLang()) => validDate(value)?.toLocaleString(latin(DATE_LOCALES[lang]), { ...dateOptions, hour: '2-digit', minute: '2-digit', hour12: false }).replace(MARKS, '') ?? '';
 
 export function initials(name = '') {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 }
 
-export const endingIn = id => `Ending ${String(id).slice(-4)}`;
-
 // Counts a figure up once when it appears. Skipped under reduced motion and where matchMedia is missing (tests).
 export function CountUp({ text }) {
   const ref = useRef(null);
   useEffect(() => {
-    const target = Number(String(text).replace(/,/g, ''));
+    const decimal = decimalSeparator();
+    const target = Number(String(text).replace(new RegExp(`[^0-9-${decimal === '.' ? '\\.' : decimal}]`, 'g'), '').replace(decimal, '.'));
     const quiet = typeof window.matchMedia !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (quiet || !Number.isFinite(target) || target === 0) return undefined;
     const element = ref.current;
-    const show = String(text).includes('.') ? money : value => String(Math.round(value));
+    const show = String(text).includes(decimal) ? money : value => String(Math.round(value));
     const begin = performance.now();
     let frame;
     const tick = now => {
@@ -58,7 +69,7 @@ const ICONS = {
   out: <><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" /><path d="M15 8l4 4-4 4M19 12H9" /></>,
 };
 export function Icon({ name }) {
-  return <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">{ICONS[name]}</svg>;
+  return <svg className="icon" data-icon={name} viewBox="0 0 24 24" aria-hidden="true">{ICONS[name]}</svg>;
 }
 
 export const SLOW_AFTER_MS = 2000;
@@ -67,11 +78,12 @@ export const DEMO_URL = 'https://github.com/RootMoataz/Paper-Maker-Banking-App/b
 
 // Shown while a request is pending. After two seconds (a cold start) the note changes to say so.
 // The note sits in a polite live region and reserves two lines, so nothing below it moves.
-export function Loading({ label = 'Loading…', rows = 3 }) {
+export function Loading({ label, rows = 3 }) {
+  const t = useT();
   const [slow, setSlow] = useState(false);
   useEffect(() => { const timer = setTimeout(() => setSlow(true), SLOW_AFTER_MS); return () => clearTimeout(timer); }, []);
   return <>
-    <p className="loading-note pending" aria-live="polite">{slow ? 'Waking up the server, this can take a few seconds.' : label}</p>
+    <p className="loading-note pending" aria-live="polite">{slow ? t('common.wake') : label ?? t('common.loading')}</p>
     <Skeleton rows={rows} />
   </>;
 }

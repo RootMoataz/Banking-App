@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './auth';
 import logo from './assets/paper-maker-logo.webp';
+import { LanguageSwitcher, useI18n } from './i18n';
 import { DEMO_URL, SLOW_AFTER_MS } from './ui';
 
-const passwordRule = 'Use 8 to 72 characters.';
+const passwordRule = 'Use 8 to 72 characters.'; // English key text; shown translated through errorText
 const passwordBytes = value => new TextEncoder().encode(value).length;
 
 function AuthShell({ title, children, footer }) {
+  const { t } = useI18n();
   return <main id="main" className="auth">
     <div className="auth-art">
       <span className="brand-mark"><img src={logo} alt="" /></span>
       <span className="brand-name">Paper Maker</span>
-      <p className="auth-tag">A learning bank. Every move is on the record, and no real money moves.</p>
+      <p className="auth-tag">{t('auth.tag')}</p>
       <p className="auth-serial" aria-hidden="true">PM 0042 7719</p>
     </div>
     <div className="auth-side">
+      <LanguageSwitcher id="lang-auth" className="auth-lang" />
       <section className="panel auth-card" aria-labelledby="auth-title"><h1 id="auth-title">{title}</h1>{children}<p className="auth-foot">{footer}</p></section>
     </div>
   </main>;
@@ -24,6 +27,7 @@ function AuthShell({ title, children, footer }) {
 // The live region announces minute changes; the per-second digits are hidden from screen readers.
 const remainingSeconds = (until, now) => Math.max(0, Math.ceil((until - now) / 1000));
 function Remaining({ until, onDone }) {
+  const { t } = useI18n();
   const [now, setNow] = useState(() => Date.now());
   const seconds = remainingSeconds(until, now);
   useEffect(() => {
@@ -32,15 +36,16 @@ function Remaining({ until, onDone }) {
     const timer = setTimeout(() => setNow(Date.now()), wait);
     return () => clearTimeout(timer);
   }, [seconds, now, until, onDone]);
-  if (seconds >= 60) { const minutes = Math.ceil(seconds / 60); return <>{minutes} {minutes === 1 ? 'minute' : 'minutes'}</>; }
-  return <><span aria-hidden="true">{seconds} {seconds === 1 ? 'second' : 'seconds'}</span><span className="sr-only">less than a minute</span></>;
+  if (seconds >= 60) return <>{t('auth.lockout.minutes', { count: Math.ceil(seconds / 60) })}</>;
+  return <><span aria-hidden="true">{t('auth.lockout.seconds', { count: seconds })}</span><span className="sr-only">{t('auth.lockout.lessThanMinute')}</span></>;
 }
 
 function Lockout({ lock, onDone }) {
+  const { t } = useI18n();
   if (!lock) return null;
   return <p role="status" className="lockout">{lock.until === null
-    ? 'Too many failed attempts. Try again in a few minutes.'
-    : <>Too many failed attempts. Try again in <Remaining until={lock.until} onDone={onDone} />.</>}</p>;
+    ? t('auth.lockout.unknown')
+    : t('auth.lockout.until', { time: <Remaining until={lock.until} onDone={onDone} /> })}</p>;
 }
 
 function useSubmit(action) {
@@ -69,46 +74,50 @@ function useSubmit(action) {
   return { busy, error, submit, slow, lock, unlock, locked: Boolean(lock?.until) };
 }
 
+const pageLink = (path, text, onNavigate) => <a href={path} onClick={event => { event.preventDefault(); onNavigate(path); }}>{text}</a>;
+
 export function Login({ onNavigate }) {
+  const { t, errorText } = useI18n();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { busy, error, submit, slow, lock, unlock, locked } = useSubmit(() => login(email.trim(), password));
-  return <AuthShell title="Sign in" footer={<>New here? <a href="/register" onClick={event => { event.preventDefault(); onNavigate('/register'); }}>Create an account</a></>}>
-    {error && <p role="alert" className="error">{error}</p>}
+  return <AuthShell title={t('auth.signIn.title')} footer={t('auth.signIn.foot', { link: pageLink('/register', t('auth.signIn.footLink'), onNavigate) })}>
+    {error && <p role="alert" className="error">{errorText(error)}</p>}
     <Lockout lock={lock} onDone={unlock} />
     <form onSubmit={submit}><fieldset disabled={busy}>
-      <label htmlFor="email">Email</label>
+      <label htmlFor="email">{t('common.email')}</label>
       <input id="email" type="email" autoFocus required maxLength={100} autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} />
-      <label htmlFor="password">Password</label>
+      <label htmlFor="password">{t('common.password')}</label>
       <input id="password" type="password" required autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} />
-      <div className="actions"><button type="submit" disabled={locked}>{busy ? 'Signing in…' : 'Sign in'}</button></div>
-      <p className="wake-note" aria-live="polite">{busy && slow ? 'Waking up the server, this can take a few seconds.' : ''}</p>
+      <div className="actions"><button type="submit" disabled={locked}>{busy ? t('auth.signIn.busy') : t('auth.signIn.submit')}</button></div>
+      <p className="wake-note" aria-live="polite">{busy && slow ? t('common.wake') : ''}</p>
     </fieldset></form>
-    <p className="demo-note">Want to look around first? <a href={DEMO_URL} target="_blank" rel="noopener noreferrer">See the demo accounts<span className="sr-only"> (opens GitHub in a new tab)</span></a></p>
+    <p className="demo-note">{t('auth.signIn.demo', { link: <a href={DEMO_URL} target="_blank" rel="noopener noreferrer">{t('auth.signIn.demoLink')}<span className="sr-only"> {t('common.newTab')}</span></a> })}</p>
   </AuthShell>;
 }
 
 export function Register({ onNavigate }) {
+  const { t, errorText } = useI18n();
   const { register } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { busy, error, submit, slow, lock, unlock, locked } = useSubmit(() => register(name.trim(), email.trim(), password));
   const validate = () => { const size = passwordBytes(password); return size < 8 || size > 72 ? passwordRule : ''; };
-  return <AuthShell title="Create your account" footer={<>Already registered? <a href="/login" onClick={event => { event.preventDefault(); onNavigate('/login'); }}>Sign in</a></>}>
-    {error && <p role="alert" className="error">{error}</p>}
+  return <AuthShell title={t('auth.register.title')} footer={t('auth.register.foot', { link: pageLink('/login', t('auth.register.footLink'), onNavigate) })}>
+    {error && <p role="alert" className="error">{errorText(error)}</p>}
     <Lockout lock={lock} onDone={unlock} />
     <form onSubmit={event => submit(event, validate)}><fieldset disabled={busy}>
-      <label htmlFor="name">Name</label>
+      <label htmlFor="name">{t('common.name')}</label>
       <input id="name" autoFocus required maxLength={100} pattern=".*\S.*" autoComplete="name" value={name} onChange={event => setName(event.target.value)} />
-      <label htmlFor="email">Email</label>
+      <label htmlFor="email">{t('common.email')}</label>
       <input id="email" type="email" required maxLength={100} autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} />
-      <label htmlFor="password">Password</label>
+      <label htmlFor="password">{t('common.password')}</label>
       <input id="password" type="password" required autoComplete="new-password" aria-describedby="password-help" value={password} onChange={event => setPassword(event.target.value)} />
-      <p id="password-help">{passwordRule} It must not be the same as your email.</p>
-      <div className="actions"><button type="submit" disabled={locked}>{busy ? 'Creating…' : 'Create account'}</button></div>
-      <p className="wake-note" aria-live="polite">{busy && slow ? 'Waking up the server, this can take a few seconds.' : ''}</p>
+      <p id="password-help">{t('auth.passwordHelp')}</p>
+      <div className="actions"><button type="submit" disabled={locked}>{busy ? t('auth.register.busy') : t('auth.register.submit')}</button></div>
+      <p className="wake-note" aria-live="polite">{busy && slow ? t('common.wake') : ''}</p>
     </fieldset></form>
   </AuthShell>;
 }

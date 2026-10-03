@@ -63,10 +63,22 @@ The landing hero fans two plain notes behind the interactive sample note. Sectio
 
 Truthful and plain. This is an educational project, not a real bank: no real money, cards or payments, not regulated or insured, and say so where it matters (landing hero, landing disclaimer, footer, sign-in panel). No promises of rates, safety or approval. Short sentences, the user's words, no jargon. Amounts show two decimals with no currency symbol.
 
+## Languages and right-to-left
+
+English, Arabic, French, Spanish and German, chosen with the language select (own-name options) in the landing header and its menu, on the sign-in and register pages, and in the app top bar (inside the menu drawer on phones). The choice is kept in `localStorage` (`pm.lang`); a first visit follows `navigator.languages`.
+
+- Copy lives in `src/i18n/*.js`, never inline. English is the source of truth: a new key must exist in all five dictionaries, with the same `{placeholders}` (a unit test fails otherwise). Use `t(key, params)` from `useT()`/`useI18n()`; plurals are `{ one, other }` objects (Arabic needs all six forms); store messages in state as keys or English API text and translate when rendering, so a language change updates them.
+- Formal register: "vous", "Sie", "usted"; Modern Standard Arabic. Keep the "educational project, not a real bank" meaning in every language. "Paper Maker" and emails are not translated.
+- Digits are always Western (0-9), in Arabic too. Format through `money`, `shortDate` and `dateTime` (`ui.jsx`), which use `-u-nu-latn`; separators and month names follow the language. Amounts keep two decimals and no currency symbol.
+- CSS uses logical properties only: `margin-inline-*`, `padding-inline-*`, `inset-inline-*`, `border-inline-*`, `text-align: start/end`. No `left`/`right`, `float` or `translateX` for layout; where a direction truly differs (drawer slide, sidebar rail gradient, arrows, chevrons, background positions) add an `html[dir="rtl"]` rule. Pseudo-element text comes from `--t-*` custom properties set by the provider.
+- Numbers, ids and emails are `direction: ltr; unicode-bidi: isolate` (so a minus stays in front); their alignment is set by hand under `[dir="rtl"]`. Banknote graphics are not mirrored.
+- Arabic uses system fonts after the Latin faces (`Segoe UI`, Tahoma, `Noto Sans Arabic`; `Noto Naskh Arabic`/`Traditional Arabic` for headings), line-height 1.65, no letter spacing and no italics. No web font is added.
+- Text grows 20-40% in French, Spanish and German. Do not give buttons or labels fixed widths; check de, fr and ar at 390px and 1280px. The landing header swaps to the menu button under 1290px (1390px in French and Spanish).
+
 ## Responsive breakpoints in use
 
 - App (`styles.css`): 900px (side nav becomes a menu drawer, tables stack into rows, 44px actions, sign-in panel becomes a banner above the form) and 720px (single-column summary tiles, smaller headings and padding, tape rows, full-width dialog buttons).
-- Landing (`landing.css`): 1180px (menu button replaces the header links), 960px (hero and split sections go single column), 860px (ledger single column), 720px (steps, roles and cards stack, full-width buttons), 480px (decorative stamp hidden).
+- Landing (`landing.css`): 1290px, or 1390px in French and Spanish (menu button replaces the header links), 960px (hero and split sections go single column), 860px (ledger single column), 720px (steps, roles and cards stack, full-width buttons), 480px (decorative stamp hidden).
 - Checked viewports: 1440x900, 1280x800 and 390x844.
 
 ## Visual baselines
