@@ -158,10 +158,10 @@ it('opens an account for the customer and shows history', async () => {
   await user.click(await screen.findByRole('button', { name: 'History' }));
   expect(await screen.findByText('DEPOSIT')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Open account' }));
-  await user.type(screen.getByLabelText('Account type'), 'CHECKING');
+  await user.selectOptions(screen.getByLabelText('Account type'), 'Checking');
   await user.click(screen.getByRole('button', { name: 'Create account' }));
   expect(await screen.findByText('Account opened.')).toBeInTheDocument();
-  expect(JSON.parse(calls.find(c => c.path === '/accounts' && c.method === 'POST').body)).toEqual({ customerId: 'c1', accountType: 'CHECKING' });
+  expect(JSON.parse(calls.find(c => c.path === '/accounts' && c.method === 'POST').body)).toEqual({ customerId: 'c1', accountType: 'Checking' });
 });
 
 it('transfers from an own account with a fresh idempotency key per submit', async () => {
@@ -219,4 +219,27 @@ it('signs out', async () => {
   await user.click(await screen.findByRole('button', { name: 'Sign out' }));
   expect(await screen.findByRole('heading', landingHeading)).toBeInTheDocument();
   expect(sessionStorage.getItem(KEY)).toBeNull();
+});
+
+it('customer open-account select lists the types, blocks submit until chosen, and sends the English type in German', async () => {
+  localStorage.setItem('pm.lang', 'de');
+  signedIn(ada, {
+    'GET /customers/c1/accounts': () => reply([{ ...acct, accountType: 'Savings' }, { ...acct, accountId: 'a9', accountType: 'Legacy Gold' }]),
+    'POST /accounts': () => reply({ ...acct, accountId: 'a2' }, 201),
+  });
+  const user = userEvent.setup();
+  render(<Root />);
+  expect(await screen.findByText('Sparkonto')).toBeInTheDocument();
+  expect(screen.getByText('Legacy Gold')).toBeInTheDocument();
+  await user.click(screen.getAllByRole('button', { name: 'Konto eröffnen' })[0]);
+  const select = screen.getByLabelText('Kontoart');
+  expect(select.tagName).toBe('SELECT');
+  expect(select).toHaveFocus();
+  expect(within(select).getAllByRole('option').map(o => o.textContent)).toEqual(['Kontoart auswählen', 'Girokonto', 'Sparkonto', 'Kontokorrentkonto', 'Geschäftskonto', 'Studentenkonto']);
+  await user.click(screen.getByRole('button', { name: 'Konto erstellen' }));
+  expect(select.validationMessage).toBe('Wählen Sie eine Kontoart aus.');
+  expect(calls.some(c => c.method === 'POST')).toBe(false);
+  await user.selectOptions(select, 'Savings');
+  await user.click(screen.getByRole('button', { name: 'Konto erstellen' }));
+  await waitFor(() => expect(JSON.parse(calls.find(c => c.path === '/accounts' && c.method === 'POST').body)).toEqual({ customerId: 'c1', accountType: 'Savings' }));
 });

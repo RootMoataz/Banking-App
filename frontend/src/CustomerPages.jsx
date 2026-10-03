@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest } from './api';
 import { AccountCells, History, ListStatus, amountPattern, useList } from './Accounts';
+import { ACCOUNT_TYPES, accountTypeLabel } from './accountTypes';
 import { useAuth } from './auth';
 import { useI18n } from './i18n';
 import { Empty, Summary, money } from './ui';
@@ -17,9 +18,9 @@ function OpenAccount({ customerId, onCancel, onDone }) {
   async function submit(event) {
     event.preventDefault();
     if (lock.current) return;
-    if (!accountType.trim()) { setError('Enter an account type.'); return; }
+    if (!accountType) { setError('Select an account type.'); return; }
     lock.current = true; setBusy(true); setError('');
-    try { await apiRequest('/accounts', { method: 'POST', data: { customerId, accountType: accountType.trim() } }); onDone(); }
+    try { await apiRequest('/accounts', { method: 'POST', data: { customerId, accountType } }); onDone(); }
     catch (err) { setError(err.message); setBusy(false); }
     finally { lock.current = false; }
   }
@@ -27,7 +28,10 @@ function OpenAccount({ customerId, onCancel, onDone }) {
     {error && <p role="alert" className="error">{errorText(error)}</p>}
     <form onSubmit={submit}><fieldset disabled={busy}>
       <label htmlFor="account-type">{t('accounts.type')}</label>
-      <input id="account-type" autoFocus required maxLength={50} value={accountType} onChange={event => setAccountType(event.target.value)} />
+      <select id="account-type" autoFocus required value={accountType} onInvalid={event => event.target.setCustomValidity(t('err.accountType'))} onChange={event => { event.target.setCustomValidity(''); setAccountType(event.target.value); }}>
+        <option value="" disabled>{t('accounts.typeChoose')}</option>
+        {ACCOUNT_TYPES.map(type => <option key={type} value={type}>{accountTypeLabel(t, type)}</option>)}
+      </select>
       <div className="actions"><button type="submit">{busy ? t('op.submitting') : t('accounts.create')}</button><button type="button" className="secondary" onClick={onCancel}>{t('common.cancel')}</button></div>
     </fieldset></form>
   </section>;
@@ -98,7 +102,7 @@ export function Transfer() {
         <label htmlFor="from-account">{t('op.from')}</label>
         <select id="from-account" required value={from} onChange={event => setFrom(event.target.value)}>
           <option value="">{t('op.fromChoose')}</option>
-          {state.items.map(item => <option key={item.accountId} value={item.accountId}>{item.accountType} · {item.accountId} · {money(item.balance)}</option>)}
+          {state.items.map(item => <option key={item.accountId} value={item.accountId}>{accountTypeLabel(t, item.accountType)} · {item.accountId} · {money(item.balance)}</option>)}
         </select>
         <label htmlFor="to-account">{t('transfer.toId')}</label>
         <input id="to-account" required maxLength={64} value={to} onChange={event => setTo(event.target.value)} />

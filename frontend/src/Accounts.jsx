@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest } from './api';
+import { ACCOUNT_TYPES, accountTypeLabel } from './accountTypes';
 import { useI18n } from './i18n';
 import { Empty, Loading, Summary, dateTime, money, shortDate } from './ui';
 
@@ -39,12 +40,12 @@ function TransferFields({ from, to, setFrom, setTo }) {
       <label htmlFor="from-account">{t('op.from')}</label>
       <select id="from-account" required value={from} onChange={event => { setFrom(event.target.value); if (event.target.value === to) setTo(''); }}>
         <option value="">{t('op.fromChoose')}</option>
-        {state.items.map(item => <option key={item.accountId} value={item.accountId}>{item.userName} · {item.accountType} · {item.accountId} · {money(item.balance)}</option>)}
+        {state.items.map(item => <option key={item.accountId} value={item.accountId}>{item.userName} · {accountTypeLabel(t, item.accountType)} · {item.accountId} · {money(item.balance)}</option>)}
       </select>
       <label htmlFor="to-account">{t('op.to')}</label>
       <select id="to-account" required value={to} onChange={event => setTo(event.target.value)}>
         <option value="">{t('op.toChoose')}</option>
-        {state.items.filter(item => item.accountId !== from).map(item => <option key={item.accountId} value={item.accountId}>{item.userName} · {item.accountType} · {item.accountId}</option>)}
+        {state.items.filter(item => item.accountId !== from).map(item => <option key={item.accountId} value={item.accountId}>{item.userName} · {accountTypeLabel(t, item.accountType)} · {item.accountId}</option>)}
       </select>
     </>}
   </>;
@@ -71,12 +72,12 @@ function Operation({ operation, customer, onCancel, onSuccess, onBusy }) {
       setError('Enter a positive amount up to 99999999.99 with at most two decimal places.'); return;
     }
     if (kind === 'transfer' && (!from || !to || from === to)) { setError('Choose two different accounts.'); return; }
-    if (kind === 'open' && !accountType.trim()) { setError('Enter an account type.'); return; }
+    if (kind === 'open' && !accountType) { setError('Select an account type.'); return; }
     lock.current = true; setBusy(true); onBusy(true); setError('');
     try {
       let path, options;
       if (kind === 'delete') { path = `/accounts/${encodeURIComponent(account.accountId)}`; options = { method: 'DELETE' }; }
-      else if (kind === 'open') { path = '/accounts'; options = { method: 'POST', data: { customerId: customer.customerId, accountType: accountType.trim() } }; }
+      else if (kind === 'open') { path = '/accounts'; options = { method: 'POST', data: { customerId: customer.customerId, accountType } }; }
       else {
         path = kind === 'transfer' ? '/transfers' : `/accounts/${encodeURIComponent(account.accountId)}/${kind}`;
         options = { method: 'POST', idempotencyKey: crypto.randomUUID(), data: kind === 'transfer' ? { fromAccountId: from, toAccountId: to, amount } : { amount } };
@@ -97,7 +98,10 @@ function Operation({ operation, customer, onCancel, onSuccess, onBusy }) {
     <h2 id="operation-title">{t(`op.${kind}`)}{account ? ` · ${account.accountId}` : ''}</h2>
     {error && <p role="alert" className="error">{errorText(error)}</p>}
     <form onSubmit={submit}><fieldset disabled={busy}>
-      {kind === 'open' ? <><label htmlFor="account-type">{t('accounts.type')}</label><input id="account-type" autoFocus required maxLength={50} value={accountType} onChange={event => setAccountType(event.target.value)} /></> : <>
+      {kind === 'open' ? <><label htmlFor="account-type">{t('accounts.type')}</label><select id="account-type" autoFocus required value={accountType} onInvalid={event => event.target.setCustomValidity(t('err.accountType'))} onChange={event => { event.target.setCustomValidity(''); setAccountType(event.target.value); }}>
+        <option value="" disabled>{t('accounts.typeChoose')}</option>
+        {ACCOUNT_TYPES.map(type => <option key={type} value={type}>{accountTypeLabel(t, type)}</option>)}
+      </select></> : <>
         {kind === 'transfer' && <TransferFields from={from} to={to} setFrom={setFrom} setTo={setTo} />}
         <label htmlFor="amount">{t('common.amount')}</label><input id="amount" autoFocus={kind !== 'transfer'} inputMode="decimal" required pattern={amountPattern} value={amount} onChange={event => setAmount(event.target.value)} aria-describedby="amount-help" />
         <p id="amount-help">{t('op.amountHelp')}</p>
@@ -159,7 +163,7 @@ export default function Accounts({ customer, onBack, onNavigationLock }) {
 export function AccountCells({ account, showOwner = false, history, disabled = false, begin, showHistory }) {
   const { t } = useI18n();
   return <>
-    <th scope="row" className="identifier c-id">{account.accountId}</th><td className="c-type" data-label={t('accounts.colType')}>{account.accountType}<span className="c-end">{t('accounts.ending', { id: String(account.accountId).slice(-4) })}</span></td>
+    <th scope="row" className="identifier c-id">{account.accountId}</th><td className="c-type" data-label={t('accounts.colType')}>{accountTypeLabel(t, account.accountType)}<span className="c-end">{t('accounts.ending', { id: String(account.accountId).slice(-4) })}</span></td>
     {showOwner && <td className="c-owner" data-label={t('accounts.colOwner')}>{account.userName}</td>}
     <td className="c-opened" data-label={t('accounts.colOpened')}>{shortDate(account.createdAt)}</td><td className="money c-bal" data-label={t('accounts.colBalance')}>{money(account.balance)}</td>
     <td className="c-act"><div className="actions account-actions">

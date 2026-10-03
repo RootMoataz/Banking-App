@@ -19,6 +19,17 @@ const screens = [
     await page.getByRole('button', { name: 'Accounts for Asha Rao' }).click();
     await page.getByRole('table').waitFor();
   }],
+  ['admin open account form', admin, '/', async page => {
+    await page.getByRole('button', { name: 'Accounts for Asha Rao' }).click();
+    await page.getByRole('table').waitFor();
+    await page.getByRole('button', { name: 'Open account' }).click();
+    await page.getByLabel('Account type').waitFor();
+  }],
+  ['customer open account form', customer, '/accounts', async page => {
+    await page.getByRole('table').waitFor();
+    await page.getByRole('button', { name: 'Open account' }).click();
+    await page.getByLabel('Account type').waitFor();
+  }],
   ['premium list', admin, '/premium', page => page.getByRole('table').waitFor()],
   ['admin delete dialog', admin, '/', async page => {
     await page.getByRole('button', { name: 'Delete Ben Carter' }).click();

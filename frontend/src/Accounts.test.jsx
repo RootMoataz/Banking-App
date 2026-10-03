@@ -2,6 +2,7 @@ import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import Accounts from './Accounts';
+import { I18nProvider } from './i18n';
 
 const customer = { customerId: 'c1', name: 'Ada' };
 const account = { accountId: 'a1', customerId: 'c1', userName: 'Ada', accountType: 'SAVINGS', balance: '0.00' };
@@ -79,10 +80,10 @@ it('shows the server nonzero-balance error after confirmed deletion', async () =
 
 it('opens an account for the selected customer', async () => {
   const user = await openAction('Open account');
-  await user.type(screen.getByLabelText('Account type'), 'CURRENT');
+  await user.selectOptions(screen.getByLabelText('Account type'), 'Current');
   await user.click(screen.getByRole('button', { name: 'Create account' }));
   await screen.findByText('Account opened.');
-  expect(JSON.parse(requests.find(item => item.method === 'POST').body)).toEqual({ customerId: 'c1', accountType: 'CURRENT' });
+  expect(JSON.parse(requests.find(item => item.method === 'POST').body)).toEqual({ customerId: 'c1', accountType: 'Current' });
 });
 
 it('loads account transaction history', async () => {
@@ -117,4 +118,28 @@ it('disables deletion when the displayed balance is nonzero', async () => {
   fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => [{ ...account, balance: '0.01' }] });
   render(<Accounts customer={customer} onBack={() => {}} />);
   expect(await screen.findByRole('button', { name: 'Delete account a1' })).toBeDisabled();
+});
+
+it('lists the five types behind a placeholder and blocks submit with a validation message until one is chosen', async () => {
+  const user = await openAction('Open account');
+  const select = screen.getByLabelText('Account type');
+  expect(select.tagName).toBe('SELECT');
+  expect(select).toHaveFocus();
+  expect(within(select).getAllByRole('option').map(o => o.textContent)).toEqual(['Select an account type', 'Checking', 'Savings', 'Current', 'Business', 'Student']);
+  await user.click(screen.getByRole('button', { name: 'Create account' }));
+  expect(select).toBeInvalid();
+  expect(select.validationMessage).toBe('Select an account type.');
+  expect(requests.some(item => item.method === 'POST')).toBe(false);
+});
+
+it('sends the English type name when the interface is German, and shows raw legacy types as stored', async () => {
+  localStorage.setItem('pm.lang', 'de');
+  const user = userEvent.setup();
+  render(<I18nProvider><Accounts customer={customer} onBack={() => {}} /></I18nProvider>);
+  expect(await screen.findByText('SAVINGS')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Konto eröffnen' }));
+  await user.selectOptions(screen.getByLabelText('Kontoart'), 'Sparkonto');
+  await user.click(screen.getByRole('button', { name: 'Konto erstellen' }));
+  await waitFor(() => expect(requests.some(item => item.method === 'POST')).toBe(true));
+  expect(JSON.parse(requests.find(item => item.method === 'POST').body)).toEqual({ customerId: 'c1', accountType: 'Savings' });
 });

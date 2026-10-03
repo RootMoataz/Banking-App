@@ -101,7 +101,7 @@ const ERROR_KEYS = {
   'The server returned an invalid response. Please try again.': 'err.invalidResponse',
   'Enter a positive amount up to 99999999.99 with at most two decimal places.': 'err.amountInvalid',
   'Choose two different accounts.': 'err.chooseTwo',
-  'Enter an account type.': 'err.accountType',
+  'Select an account type.': 'err.accountType',
   'Choose your account and a different destination account.': 'err.chooseOwnAndOther',
   'Use 8 to 72 characters.': 'auth.passwordRule',
   'The result is unknown. Check account balances and history before submitting again.': 'err.unknownResultAccounts',
