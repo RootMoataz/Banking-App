@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from './auth';
-import logo from './assets/paper-maker-logo.png';
+import logo from './assets/paper-maker-logo.webp';
 import { initials } from './ui';
 
 const roleLabel = { ADMIN: 'Administrator', CUSTOMER: 'Customer' };

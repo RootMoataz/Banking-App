@@ -1,6 +1,6 @@
-/* Theme: one set of tokens for the app and the landing page. Greens are sampled from paper-maker-logo.png
+/* Theme: one set of tokens for the app and the landing page. Greens are sampled from paper-maker-logo.webp
    (outline #033923, banknote #145A3A / #24723D, leaf #89BE8E, sage #C3D9A5; gold #E2AD4B). */
-/* Theme: one set of tokens for the app and the landing page. Greens are sampled from paper-maker-logo.png
+/* Theme: one set of tokens for the app and the landing page. Greens are sampled from paper-maker-logo.webp
    (outline #033923, banknote #145A3A / #24723D, leaf #89BE8E, sage #C3D9A5; gold #E2AD4B). */
 :root {
   --forest-deep: #022414;
@@ -138,6 +138,11 @@ input:disabled, select:disabled { background: var(--page); color: #3F5247; borde
 [role="status"]:empty { display: none; }
 [role="status"]:not(:empty) { color: var(--green-ink); background: var(--green-tint); border: 1px solid #B5D3BB; border-left: 4px solid var(--green); padding: 12px 16px; border-radius: var(--radius-sm); margin: 0 0 20px; font-weight: 500; }
 .loading-note { color: var(--muted); margin: 0 0 16px; }
+.loading-note.pending { min-height: 1.5em; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+[role="status"].lockout:not(:empty) { color: var(--red-ink); background: var(--red-tint); border: 1px solid #E8B4AE; border-left: 4px solid var(--red); font-weight: 500; }
+.wake-note { margin: 12px 0 0; min-height: 3em; color: var(--muted); font-size: 14px; }
+.empty button { margin-top: 18px; }
 
 /* skeleton */
 .skeleton { display: grid; gap: 12px; margin-bottom: 28px; }
@@ -229,6 +234,7 @@ table.cards td .actions button { min-height: 40px; padding: 6px 14px; font-size:
 .auth-card .actions button { width: 100%; }
 .auth-card .actions { margin-top: 8px; }
 .auth-foot { margin: 0; color: var(--muted); }
+.auth-foot a { display: inline-block; padding: 12px 6px; margin: -12px -6px; }
 
 /* dialog */
 dialog { color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 28px 24px; max-width: 520px; width: calc(100% - 32px); max-height: calc(100vh - 32px); overflow-y: auto; box-shadow: 0 16px 40px rgba(2,36,20,.28); animation: pop .18s ease-out; }
@@ -253,8 +259,21 @@ dialog .actions { justify-content: flex-end; padding-top: 18px; border-top: 1px 
   .scrim[data-open="true"] { display: block; position: fixed; inset: var(--topbar) 0 0 0; z-index: 35; background: rgba(2,36,20,.5); }
   main { padding: 24px 20px 40px; }
   footer { padding-inline: 20px; }
+  /* stacked register rows */
+  .stack, .stack tbody, .stack tr, .stack th, .stack td { display: block; }
+  .stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .stack tr { padding: 14px 16px; border-top: 1px solid var(--line); }
+  .stack th, .stack td { border: 0; padding: 3px 0; text-align: left; }
+  .stack th:first-child, .stack td:first-child, .stack th:last-child, .stack td:last-child { padding: 3px 0; }
+  .stack td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); }
+  .stack td .actions { justify-content: flex-start; flex-wrap: wrap; margin-top: 8px; }
+  .stack td .actions button { min-height: 44px; }
+  table.stack td:last-child { width: auto; white-space: normal; }
+  .stack caption { display: block; }
+  table.cards td .actions button { min-height: 44px; }
 }
 @media (max-width: 720px) {
+  .loading-note.pending { min-height: 3em; }
   .who-text { display: none; }
   h1 { font-size: 24px; }
   .heading { align-items: flex-start; }
@@ -268,23 +287,17 @@ dialog .actions { justify-content: flex-end; padding-top: 18px; border-top: 1px 
   dialog .actions { flex-direction: column-reverse; align-items: stretch; }
   table.cards tbody { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   table.cards tr { padding: 24px 22px 20px; }
-  /* stacked register rows */
-  .stack, .stack tbody, .stack tr, .stack th, .stack td { display: block; }
-  .stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .stack tr { padding: 14px 16px; border-top: 1px solid var(--line); }
-  .stack th, .stack td { border: 0; padding: 3px 0; text-align: left; }
-  .stack th:first-child, .stack td:first-child, .stack th:last-child, .stack td:last-child { padding: 3px 0; }
-  .stack td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); }
-  .stack td .actions { justify-content: flex-start; flex-wrap: wrap; margin-top: 8px; }
-  .stack td .actions button { min-height: 44px; }
-  .stack caption { display: block; }
   /* tape rows */
   .tape { padding: 14px 16px 18px; font-size: 13px; }
   .tape thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .tape table, .tape tbody, .tape caption { display: block; }
   .tape tr { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 14px; padding: 10px 0; border-bottom: 1px dashed var(--tape-line); }
   .tape th, .tape td { display: block; border: 0; padding: 0; }
-  .tape .t-date { grid-column: 1 / -1; color: #4A5663; font-size: 12px; }
+  .tape tr { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .tape .t-date, .tape .t-type { grid-column: 1 / -1; }
+  .tape .t-date { color: #4A5663; font-size: 12px; }
+  .tape td.t-amount::before { text-align: left; }
+  .tape td.t-amount { text-align: left; }
   .tape .money { padding-left: 0; }
   .tape td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 400; color: #4A5663; text-align: right; }
 }

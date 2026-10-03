@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import '@fontsource/newsreader/latin-500.css';
 import '@fontsource/newsreader/latin-600.css';
 import './landing.css';
-import logo from './assets/paper-maker-logo.png';
+import logo from './assets/paper-maker-logo.webp';
 import { money } from './ui';
 
 // Public landing page. Pure presentation plus a client-side sample: no API calls.

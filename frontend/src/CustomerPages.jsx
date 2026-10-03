@@ -37,19 +37,25 @@ export function MyAccounts() {
   const [opening, setOpening] = useState(false);
   const [history, setHistory] = useState(null);
   const [message, setMessage] = useState('');
+  const opener = useRef(null);
+  const heading = useRef(null);
+  function openForm(event) { opener.current = event.currentTarget; setMessage(''); setHistory(null); setOpening(true); }
+  function closeForm(saved) { setOpening(false); setTimeout(() => (!saved && opener.current?.isConnected ? opener.current : heading.current)?.focus(), 0); }
+  function showHistory(account, trigger) { opener.current = trigger; setHistory(account); }
+  function closeHistory() { setHistory(null); setTimeout(() => (opener.current?.isConnected ? opener.current : heading.current)?.focus(), 0); }
   return <>
-    <div className="heading"><div><h1>My accounts</h1><p>Your accounts and their balances.</p></div><div className="actions">
-      <button disabled={opening || state.loading || Boolean(state.error)} onClick={() => { setMessage(''); setHistory(null); setOpening(true); }}>Open account</button>
+    <div className="heading"><div><h1 ref={heading} tabIndex={-1}>My accounts</h1><p>Your accounts and their balances.</p></div><div className="actions">
+      <button disabled={opening || state.loading || Boolean(state.error)} onClick={openForm}>Open account</button>
     </div></div>
     {!state.loading && !state.error && state.items.length > 0 && <Summary items={[['Accounts held', state.items.length], ['Combined balance', money(state.items.reduce((sum, item) => sum + Number(item.balance), 0))]]} />}
     <p role="status">{message}</p>
-    {opening && <OpenAccount customerId={user.customerId} onCancel={() => setOpening(false)} onDone={() => { setOpening(false); setMessage('Account opened.'); setRevision(value => value + 1); }} />}
+    {opening && <OpenAccount customerId={user.customerId} onCancel={() => closeForm(false)} onDone={() => { closeForm(true); setMessage('Account opened.'); setRevision(value => value + 1); }} />}
     <ListStatus state={state} />
-    {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No accounts yet." hint="Open an account to begin your ledger." /> : <table className="cards"><caption>My accounts</caption><thead><tr><th>Account ID</th><th>Type</th><th>Opened</th><th className="money">Balance</th><th>Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
+    {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No accounts yet." hint="Open an account to begin your ledger." action={{ label: 'Open your first account', onClick: openForm, disabled: opening }} /> : <table className="cards"><caption>My accounts</caption><thead><tr><th scope="col">Account ID</th><th scope="col">Type</th><th scope="col">Opened</th><th scope="col" className="money">Balance</th><th scope="col">Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
       <th scope="row" className="identifier c-id">{account.accountId}</th><td className="c-type" data-label="Type">{account.accountType}<span className="c-end">{endingIn(account.accountId)}</span></td><td className="c-opened" data-label="Opened">{shortDate(account.createdAt)}</td><td className="money c-bal" data-label="Balance">{money(account.balance)}</td>
-      <td className="c-act"><div className="actions account-actions"><button className="secondary" onClick={() => setHistory(account)}>History</button></div></td>
+      <td className="c-act"><div className="actions account-actions"><button className="secondary" onClick={event => showHistory(account, event.currentTarget)}>History</button></div></td>
     </tr>)}</tbody></table>)}
-    {history && <History key={history.accountId} account={history} onClose={() => setHistory(null)} />}
+    {history && <History key={history.accountId} account={history} onClose={closeHistory} />}
   </>;
 }
 

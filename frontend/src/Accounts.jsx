@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiRequest } from './api';
-import { Empty, Skeleton, Summary, endingIn, money, shortDate } from './ui';
+import { Empty, Loading, Summary, dateTime, endingIn, money, shortDate } from './ui';
 
 export const amountPattern = '(?:0|[1-9][0-9]{0,7})(?:[.][0-9]{1,2})?';
 const flowOf = type => /^deposit/i.test(type) ? { sign: '+', className: 'credit' } : /^withdraw/i.test(type) ? { sign: '-', className: 'debit' } : { sign: '', className: '' };
@@ -21,7 +21,7 @@ export function useList(path, revision = 0) {
 }
 
 export function ListStatus({ state }) {
-  return state.loading ? <><p className="loading-note">Loading...</p><Skeleton rows={3} /></> : state.error ? <div><p role="alert" className="error">{state.error}</p><button type="button" onClick={state.retry}>Retry</button></div> : null;
+  return state.loading ? <Loading /> : state.error ? <div><p role="alert" className="error">{state.error}</p><button type="button" onClick={state.retry}>Retry</button></div> : null;
 }
 
 function TransferFields({ from, to, setFrom, setTo }) {
@@ -100,11 +100,11 @@ function Operation({ operation, customer, onCancel, onSuccess, onBusy }) {
   </section>;
 }
 
-export function History({ account, onClose }) {
+export function History({ account, onClose, onDeposit }) {
   const state = useList(`/accounts/${encodeURIComponent(account.accountId)}/transactions`);
   return <section className="panel tape-panel"><div className="heading"><h2>Transactions · {account.accountId}</h2><button className="secondary" onClick={onClose}>Close history</button></div>
     <ListStatus state={state} />
-    {!state.loading && !state.error && (state.items.length === 0 ? <p>No transactions yet.</p> : <div className="tape"><table><caption>Transaction history, oldest first</caption><thead><tr><th>Date</th><th>Type</th><th className="money">Amount</th><th className="money">Balance after</th></tr></thead><tbody>{state.items.map(item => { const flow = flowOf(item.type); return <tr key={item.txnId}><td className="t-date">{new Date(item.date).toLocaleString()}</td><td className="t-type">{item.type}</td><td className={`money t-amount ${flow.className}`} data-label="Amount">{flow.sign && <span aria-hidden="true">{flow.sign}</span>}{money(item.amount)}</td><td className="money t-bal" data-label="Balance">{money(item.balanceAfter)}</td></tr>; })}</tbody></table></div>)}
+    {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No transactions yet." hint="Deposits, withdrawals and transfers will be listed here." action={onDeposit && { label: 'Make a deposit', onClick: onDeposit }} /> : <div className="tape"><table><caption>Transaction history, oldest first</caption><thead><tr><th scope="col">Date</th><th scope="col">Type</th><th scope="col" className="money">Amount</th><th scope="col" className="money">Balance after</th></tr></thead><tbody>{state.items.map(item => { const flow = flowOf(item.type); return <tr key={item.txnId}><td className="t-date">{dateTime(item.date)}</td><td className="t-type">{item.type}</td><td className={`money t-amount ${flow.className}`} data-label="Amount">{flow.sign && <span aria-hidden="true">{flow.sign}</span>}{money(item.amount)}</td><td className="money t-bal" data-label="Balance">{money(item.balanceAfter)}</td></tr>; })}</tbody></table></div>)}
   </section>;
 }
 
@@ -115,28 +115,34 @@ export default function Accounts({ customer, onBack, onNavigationLock }) {
   const [history, setHistory] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const opener = useRef(null);
+  const heading = useRef(null);
   const disabled = busy || Boolean(operation);
   useEffect(() => { onNavigationLock?.(disabled); return () => onNavigationLock?.(false); }, [disabled, onNavigationLock]);
-  function begin(kind, account) { setMessage(''); setHistory(null); setOperation({ kind, account }); }
+  function begin(kind, account, trigger = null) { opener.current = trigger; setMessage(''); setHistory(null); setOperation({ kind, account }); }
+  // Closing a form or dialog hands focus back to the button that opened it; after a save the list reloads, so go to the heading.
+  function closeOperation(saved) { setOperation(null); setTimeout(() => (!saved && opener.current?.isConnected ? opener.current : heading.current)?.focus(), 0); }
+  function showHistory(account, trigger) { opener.current = trigger; setHistory(account); }
+  function closeHistory() { setHistory(null); setTimeout(() => (opener.current?.isConnected ? opener.current : heading.current)?.focus(), 0); }
   return <>
     <button className="back-link" disabled={disabled} onClick={onBack}>Back to customers</button>
-    <div className="heading"><h1>{customer ? `${customer.name}'s accounts` : 'Premium accounts'}</h1><div className="actions">
-      {customer && <button disabled={disabled || state.loading || Boolean(state.error)} onClick={() => begin('open')}>Open account</button>}
-      <button disabled={disabled} onClick={() => begin('transfer')}>Transfer</button>
+    <div className="heading"><h1 ref={heading} tabIndex={-1}>{customer ? `${customer.name}'s accounts` : 'Premium accounts'}</h1><div className="actions">
+      {customer && <button disabled={disabled || state.loading || Boolean(state.error)} onClick={event => begin('open', null, event.currentTarget)}>Open account</button>}
+      <button disabled={disabled} onClick={event => begin('transfer', null, event.currentTarget)}>Transfer</button>
       <button className="secondary" disabled={disabled || state.loading} onClick={state.retry}>Refresh accounts</button>
     </div></div>
     {!customer && <p className="loading-note">Up to 200 accounts meeting the server's premium balance threshold, highest balance first.</p>}
     {!state.loading && !state.error && state.items.length > 0 && <Summary items={[[customer ? 'Accounts held' : 'Accounts listed', state.items.length], ['Combined balance', money(state.items.reduce((sum, item) => sum + Number(item.balance), 0))], ...(customer ? [] : [['Highest balance', money(Math.max(...state.items.map(item => Number(item.balance))))]])]} />}
     <p role="status">{message}</p>
-    {operation && <Operation operation={operation} customer={customer} onBusy={setBusy} onCancel={() => setOperation(null)} onSuccess={text => { setOperation(null); setMessage(text); setRevision(value => value + 1); }} />}
+    {operation && <Operation operation={operation} customer={customer} onBusy={setBusy} onCancel={() => closeOperation(false)} onSuccess={text => { closeOperation(true); setMessage(text); setRevision(value => value + 1); }} />}
     <ListStatus state={state} />
-    {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No accounts found." hint={customer ? "Open an account to begin this customer's ledger." : 'No account currently meets the premium balance threshold.'} /> : <table className="cards"><caption>{customer ? 'Customer accounts' : 'Premium accounts'}</caption><thead><tr><th>Account ID</th><th>Owner</th><th>Type</th><th>Opened</th><th className="money">Balance</th><th>Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
+    {!state.loading && !state.error && (state.items.length === 0 ? <Empty title="No accounts found." hint={customer ? "Open an account to begin this customer's ledger." : 'No account currently meets the premium balance threshold.'} action={customer ? { label: 'Open the first account', onClick: event => begin('open', null, event.currentTarget), disabled } : { label: 'Back to customers', onClick: onBack, disabled }} /> : <table className="cards"><caption>{customer ? 'Customer accounts' : 'Premium accounts'}</caption><thead><tr><th scope="col">Account ID</th><th scope="col">Owner</th><th scope="col">Type</th><th scope="col">Opened</th><th scope="col" className="money">Balance</th><th scope="col">Actions</th></tr></thead><tbody>{state.items.map(account => <tr key={account.accountId}>
       <th scope="row" className="identifier c-id">{account.accountId}</th><td className="c-type" data-label="Type">{account.accountType}<span className="c-end">{endingIn(account.accountId)}</span></td><td className="c-owner" data-label="Owner">{account.userName}</td><td className="c-opened" data-label="Opened">{shortDate(account.createdAt)}</td><td className="money c-bal" data-label="Balance">{money(account.balance)}</td><td className="c-act"><div className="actions account-actions">
-        <button disabled={disabled} onClick={() => begin('deposit', account)}>Deposit</button><button disabled={disabled} onClick={() => begin('withdraw', account)}>Withdraw</button>
-        <button className="secondary" disabled={disabled} onClick={() => setHistory(account)}>History</button>
-        <button className="secondary danger-text" disabled={disabled || !/^0(?:\.0+)?$/.test(String(account.balance))} title="Only zero-balance accounts can be deleted" aria-label={`Delete account ${account.accountId}`} onClick={() => begin('delete', account)}>Delete</button>
+        <button disabled={disabled} onClick={event => begin('deposit', account, event.currentTarget)}>Deposit</button><button disabled={disabled} onClick={event => begin('withdraw', account, event.currentTarget)}>Withdraw</button>
+        <button className="secondary" disabled={disabled} onClick={event => showHistory(account, event.currentTarget)}>History</button>
+        <button className="secondary danger-text" disabled={disabled || !/^0(?:\.0+)?$/.test(String(account.balance))} title="Only zero-balance accounts can be deleted" aria-label={`Delete account ${account.accountId}`} onClick={event => begin('delete', account, event.currentTarget)}>Delete</button>
       </div></td>
     </tr>)}</tbody></table>)}
-    {history && <History key={history.accountId} account={history} onClose={() => setHistory(null)} />}
+    {history && <History key={history.accountId} account={history} onClose={closeHistory} onDeposit={() => begin('deposit', history, opener.current)} />}
   </>;
 }

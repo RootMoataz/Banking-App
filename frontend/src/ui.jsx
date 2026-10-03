@@ -1,6 +1,17 @@
-export const money = value => Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+import { useEffect, useState } from 'react';
 
-export const shortDate = value => value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+// Amounts: no currency symbol, thousands separators, always two decimals, a plain minus for negatives.
+// Unparseable values show an em dash rather than "NaN".
+export const money = value => {
+  const number = Number(value);
+  return value === null || value === undefined || value === '' || !Number.isFinite(number) ? '—'
+    : number.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+// Dates: "2 Oct 2026"; date and time: "2 Oct 2026, 14:05". Both in the viewer's time zone, 24-hour clock.
+const validDate = value => { const date = value ? new Date(value) : null; return date && !Number.isNaN(date.getTime()) ? date : null; };
+export const shortDate = value => validDate(value)?.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) ?? '';
+export const dateTime = value => validDate(value)?.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) ?? '';
 
 export function initials(name = '') {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -11,6 +22,19 @@ export const endingIn = id => `Ending ${String(id).slice(-4)}`;
 
 export function Summary({ items }) {
   return <dl className="summary">{items.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>;
+}
+
+export const SLOW_AFTER_MS = 2000;
+
+// Shown while a request is pending. After two seconds (a cold start) the note changes to say so.
+// The note sits in a polite live region and reserves two lines, so nothing below it moves.
+export function Loading({ label = 'Loading…', rows = 3 }) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => { const timer = setTimeout(() => setSlow(true), SLOW_AFTER_MS); return () => clearTimeout(timer); }, []);
+  return <>
+    <p className="loading-note pending" aria-live="polite">{slow ? 'Waking up the server, this can take a few seconds.' : label}</p>
+    <Skeleton rows={rows} />
+  </>;
 }
 
 export function Skeleton({ rows = 4 }) {
@@ -26,6 +50,6 @@ export function Rosette() {
   </svg>;
 }
 
-export function Empty({ title, hint }) {
-  return <div className="empty"><Rosette /><p className="lead">{title}</p>{hint && <p className="hint">{hint}</p>}</div>;
+export function Empty({ title, hint, action }) {
+  return <div className="empty"><Rosette /><p className="lead">{title}</p>{hint && <p className="hint">{hint}</p>}{action && <button type="button" onClick={action.onClick} disabled={action.disabled}>{action.label}</button>}</div>;
 }

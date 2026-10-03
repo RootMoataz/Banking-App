@@ -5,6 +5,7 @@ import Landing from './Landing';
 import { AccessDenied, MyAccounts, Profile, Transfer } from './CustomerPages';
 import { AuthProvider, useAuth } from './auth';
 import Shell from './Shell';
+import { Loading } from './ui';
 
 const adminPaths = ['/', '/customers', '/premium'];
 const adminNav = [['/', 'Customers'], ['/premium', 'Premium accounts']];
@@ -36,7 +37,12 @@ function Routes() {
   }, []);
   const effective = resolve(path, user);
   useEffect(() => { if (!loading && effective !== path) navigate(effective, true); });
-  if (loading) return <main id="main" className="boot"><p className="loading-note">Loading…</p></main>;
+  // A distinct document title per screen, so screen reader users hear where they are.
+  useEffect(() => {
+    const names = { '/': user ? 'Customers' : 'Banking, made visible', '/customers': 'Customers', '/premium': 'Premium accounts', '/accounts': 'My accounts', '/transfer': 'Transfer', '/profile': 'Profile', '/login': 'Sign in', '/register': 'Create your account' };
+    document.title = `${names[effective] || 'Not available'} | Paper Maker`;
+  }, [effective, user]);
+  if (loading) return <main id="main" className="boot"><Loading /></main>;
   if (!user) {
     if (effective === '/register') return <Register onNavigate={navigate} />;
     return effective === '/login' ? <Login onNavigate={navigate} /> : <Landing onNavigate={navigate} />;
