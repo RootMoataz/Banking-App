@@ -17,6 +17,8 @@ These accounts let you sign in and try it without registering.
 
 All four accounts use the same password: `paper-demo-ledger-2026`
 
+The sign-in page also lists these accounts and this password, with buttons to fill the form.
+
 | Email | Role | Balance category | What it can do |
 | --- | --- | --- | --- |
 | `demo-admin@example.com` | ADMIN | none | Staff view: every customer, open accounts, deposit, withdraw, add and delete customers, delete empty accounts, the premium accounts list. Search and the audit trail are available through the API. |

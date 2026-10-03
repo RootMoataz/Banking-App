@@ -293,6 +293,19 @@ table.cards td .actions button { min-height: 40px; padding: 6px 14px; font-size:
 .auth-foot { margin: 28px 0 0; padding-top: 18px; border-top: 1px dashed var(--line-strong); color: var(--muted); }
 .demo-note { margin: 16px 0 0; color: var(--muted); font-size: 14px; }
 .demo-note a { display: inline-block; padding: 12px 4px; margin: -12px -4px; }
+.demo-card { width: 100%; max-width: 440px; margin: 0; padding: 24px 28px; border-top: 4px solid var(--gold); }
+.demo-card h2 { font-size: 22px; margin: 0 0 8px; }
+.demo-card p { margin: 0 0 12px; }
+.demo-list { list-style: none; margin: 0 0 16px; padding: 0; }
+.demo-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "email email" "role use" "what use"; align-items: center; align-content: center; gap: 4px 12px; padding: 12px 0; border-top: 1px dashed var(--line-strong); }
+.demo-email { grid-area: email; font-family: var(--mono); font-size: 14px; overflow-wrap: anywhere; }
+.demo-role { grid-area: role; justify-self: start; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--brand-tint); color: var(--forest); border: 1px solid var(--line-strong); }
+.demo-what { grid-area: what; color: var(--muted); font-size: 14px; }
+.demo-list button { grid-area: use; }
+.demo-pass { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.demo-password { font-family: var(--mono); font-size: 14px; padding: 8px 10px; background: var(--brand-tint); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); overflow-wrap: anywhere; }
+.demo-email, .demo-role, .demo-password { direction: ltr; unicode-bidi: isolate; }
+html[dir="rtl"] .demo-email { text-align: end; }
 .auth-foot a { display: inline-block; padding: 12px 6px; margin: -12px -6px; }
 
 /* dialog */
@@ -359,6 +372,9 @@ dialog .actions { justify-content: flex-end; padding-top: 18px; border-top: 1px 
   .summary > .lead dd { font-size: 42px; }
   .panel { padding: 20px 18px 22px; }
   .auth-card { padding: 26px 20px 24px; }
+  .demo-card { padding: 20px 18px; }
+  .demo-list li { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "email role" "what what" "use use"; gap: 6px 12px; }
+  .demo-list button, .demo-pass button { width: 100%; }
   dialog { padding: 22px 20px; }
   dialog .actions { flex-direction: column-reverse; align-items: stretch; }
   table.cards tbody { grid-template-columns: minmax(0, 1fr); gap: 16px; }
