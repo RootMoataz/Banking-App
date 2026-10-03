@@ -28,10 +28,10 @@ html:has(.landing) { scroll-behavior: smooth; }
 
 /* buttons (links styled as buttons) */
 .landing-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 10px 22px; border-radius: var(--radius-sm); border: 1.5px solid transparent; font-weight: 600; text-decoration: none; transition: background-color .15s ease, color .15s ease, border-color .15s ease; white-space: nowrap; }
-.landing-btn-solid { background: var(--l-navy); color: #fff; border-color: var(--l-navy); }
-.landing-btn-solid:hover { background: var(--l-night); border-color: var(--l-night); }
-.landing-btn-line { background: transparent; color: var(--l-navy); border-color: var(--l-navy); }
-.landing-btn-line:hover { background: rgba(36,114,61,.1); }
+.landing-btn-solid { background: var(--l-navy); color: #fff; border-color: var(--l-navy); box-shadow: inset 0 0 0 2px var(--l-navy), inset 0 0 0 3px var(--gold-light); }
+.landing-btn-solid:hover { background: var(--l-night); border-color: var(--l-night); box-shadow: inset 0 0 0 2px var(--l-night), inset 0 0 0 3px var(--gold-light); }
+.landing-btn-line { background: #fff; color: var(--l-navy); border-color: var(--l-navy); }
+.landing-btn-line:hover { background: var(--brand-tint); }
 .landing-btn-demo { gap: 6px; background: var(--brand-tint); color: var(--l-navy); border-color: var(--brand); border-style: dashed; }
 .landing-btn-demo:hover { background: #d3e9d8; }
 .landing-ext { font-size: 1.05em; line-height: 1; }
@@ -39,7 +39,7 @@ html:has(.landing) { scroll-behavior: smooth; }
 .landing-btn-quiet:hover { background: rgba(36,114,61,.1); }
 
 /* header */
-.landing-header { position: sticky; top: 0; z-index: 40; background: rgba(243,248,243,.96); border-bottom: 1px solid var(--l-rule); backdrop-filter: blur(6px); }
+.landing-header { position: sticky; top: 0; z-index: 40; background: rgba(243,248,243,.96); border-bottom: 1px solid var(--gold); backdrop-filter: blur(6px); }
 .landing-header nav a, .landing-header .landing-btn, .landing-brand { white-space: nowrap; }
 .landing-header-row { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; }
 .landing-brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--l-navy); font-family: var(--l-serif); font-weight: 600; font-size: 22px; letter-spacing: -.01em; }
@@ -105,9 +105,9 @@ html:has(.landing) { scroll-behavior: smooth; }
 .landing-amounts button { background: transparent; color: var(--l-navy); border: 1.5px solid var(--l-navy); font-family: var(--mono); font-weight: 500; font-size: 14px; }
 .landing-amounts button:hover:not(:disabled) { background: var(--brand-tint); border-color: var(--l-navy); }
 .landing-amounts button[aria-pressed="true"] { background: var(--l-navy); color: #fff; }
-.landing-moves button { background: var(--l-green); color: #FBF6E6; border: 1.5px solid var(--l-green); }
-.landing-moves button:hover:not(:disabled) { background: var(--brand-dark); border-color: var(--brand-dark); }
-.landing-moves button:disabled { background: #D3E2D6; border-color: #D3E2D6; color: #3F5247; }
+.landing-moves button { background: var(--l-green); color: #FBF6E6; border: 1.5px solid var(--l-green); box-shadow: inset 0 0 0 2px var(--l-green), inset 0 0 0 3px var(--gold-light); }
+.landing-moves button:hover:not(:disabled) { background: var(--brand-dark); border-color: var(--brand-dark); box-shadow: inset 0 0 0 2px var(--brand-dark), inset 0 0 0 3px var(--gold-light); }
+.landing-moves button:disabled { box-shadow: none; background: #D3E2D6; border-color: #D3E2D6; color: #3F5247; }
 .landing-controls .landing-fine { margin-top: 12px; }
 .landing-controls button.landing-reset { display: inline; min-height: 44px; padding: 0 4px; background: none; border: 0; color: var(--l-navy); text-decoration: underline; text-underline-offset: 3px; font-weight: 500; font-size: 14px; }
 .landing-controls button.landing-reset:hover:not(:disabled) { background: none; }
@@ -116,6 +116,8 @@ html:has(.landing) { scroll-behavior: smooth; }
 .landing-section { padding: clamp(48px, 7vw, 96px) 0; }
 .landing-tint { background: var(--l-paper-deep); border-block: 1px solid var(--l-rule); }
 .landing-section h2 { font-size: clamp(1.8rem, 3.4vw, 2.7rem); line-height: 1.12; margin-bottom: 14px; }
+.landing-section h2::after, .landing-learn h2::after { content: ''; display: block; width: 56px; height: 0; margin-top: 14px; border-top: 2px solid var(--gold); }
+.landing-dark h2::after { border-top-color: var(--gold-light); }
 .landing-intro { max-width: 56ch; color: var(--l-muted); font-size: 17px; margin: 0 0 36px; }
 
 .landing-ledger { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: clamp(32px, 6vw, 80px); border-top: 2px solid var(--l-navy); }
@@ -142,7 +144,7 @@ html:has(.landing) { scroll-behavior: smooth; }
 .landing-disclaimer h3 { font-size: 22px; margin-bottom: 8px; }
 .landing-disclaimer p { margin: 0; }
 
-.landing-roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 28px; border: 1.5px solid var(--l-navy); border-radius: var(--radius); background: #fff; }
+.landing-roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 28px; border: 1.5px solid var(--l-navy); border-top: 4px solid var(--gold); border-radius: var(--radius); background: #fff; }
 .landing-roles section { padding: 28px clamp(20px, 3vw, 36px) 30px; }
 .landing-roles section + section { border-left: 1.5px dashed var(--l-gold); }
 .landing-roles h3 { font-size: 26px; }
@@ -153,7 +155,7 @@ html:has(.landing) { scroll-behavior: smooth; }
 .landing-seal { width: clamp(150px, 22vw, 260px); height: auto; aspect-ratio: 1; object-fit: contain; }
 .landing-learn p { max-width: 56ch; margin: 0 0 24px; font-size: 17px; }
 
-.landing-footer { background: var(--l-night); color: var(--on-dark); padding: 28px 0; border: 0; font-size: 15px; }
+.landing-footer { background: var(--l-night); color: var(--on-dark); padding: 28px 0; border: 0; border-top: 2px solid var(--gold-light); font-size: 15px; }
 .landing-footer-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px; }
 .landing-footer p { margin: 0; color: #fff; }
 .landing-footer ul { display: flex; gap: 8px; list-style: none; margin: 0; padding: 0; }
